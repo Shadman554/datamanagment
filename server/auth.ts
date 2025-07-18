@@ -2,6 +2,9 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { storage } from './storage';
+import { db } from './db';
+import { adminUsers, adminSessions, activityLogs } from '@shared/schema';
+import { eq, and, gt } from 'drizzle-orm';
 import type { AdminUser, InsertAdminUser, InsertActivityLog } from '@shared/schema';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -379,6 +382,25 @@ export class SecureAuthService {
       .where(eq(adminUsers.username, username));
     
     return admin || null;
+  }
+
+  // Get admin by ID
+  static async getAdminById(adminId: string): Promise<AdminUser | null> {
+    try {
+      if (!db) {
+        return fallbackAdmins.find(a => a.id === adminId) || null;
+      }
+
+      const [admin] = await db
+        .select()
+        .from(adminUsers)
+        .where(eq(adminUsers.id, adminId));
+      
+      return admin || null;
+    } catch (error) {
+      // If database fails, use fallback
+      return fallbackAdmins.find(a => a.id === adminId) || null;
+    }
   }
 
   // Get all admins (super admin only)
