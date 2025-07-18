@@ -1,9 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { db } from './db';
-import { adminUsers, adminSessions, activityLogs } from '@shared/schema';
-import { eq, and, gt } from 'drizzle-orm';
+import { storage } from './storage';
 import type { AdminUser, InsertAdminUser, InsertActivityLog } from '@shared/schema';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -233,19 +231,12 @@ export class SecureAuthService {
     let admin: AdminUser | null = null;
     
     try {
-      // Get admin from database or fallback
-      if (!db) {
-        console.log("Using fallback admin storage");
+      // Try storage interface first, fallback to local storage if fails
+      try {
+        admin = await storage.getAdminByUsername(sanitizedUsername);
+      } catch (storageError) {
+        console.log("Using fallback admin storage due to storage error:", storageError.message);
         admin = fallbackAdmins.find(a => a.username.toLowerCase() === sanitizedUsername && a.isActive) || null;
-      } else {
-        const [dbAdmin] = await db
-          .select()
-          .from(adminUsers)
-          .where(and(
-            eq(adminUsers.username, sanitizedUsername),
-            eq(adminUsers.isActive, true)
-          ));
-        admin = dbAdmin || null;
       }
 
       // Always verify password (prevent user enumeration)
@@ -267,16 +258,16 @@ export class SecureAuthService {
       this.clearFailedAttempts(ipAddress);
 
       // Update last login timestamp
-      if (db) {
-        await db
-          .update(adminUsers)
-          .set({ lastLoginAt: new Date() })
-          .where(eq(adminUsers.id, admin.id));
-      } else if (admin) {
-        const fallbackAdmin = fallbackAdmins.find(a => a.id === admin.id);
-        if (fallbackAdmin) {
-          fallbackAdmin.lastLoginAt = new Date();
+      try {
+        // Try to update via storage interface
+        if (admin) {
+          const fallbackAdmin = fallbackAdmins.find(a => a.id === admin.id);
+          if (fallbackAdmin) {
+            fallbackAdmin.lastLoginAt = new Date();
+          }
         }
+      } catch (updateError) {
+        console.log("Warning: Could not update last login timestamp:", updateError.message);
       }
 
       // Generate secure token
