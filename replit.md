@@ -164,6 +164,8 @@ The application is designed to be deployed on platforms that support Node.js wit
 
 ```
 Recent Changes:
+- July 18, 2025: AUTHENTICATION: Updated authentication system to use PostgreSQL users table instead of admin_users table
+- July 18, 2025: DATABASE: Modified users table structure to support admin authentication with password, role, and is_active fields
 - July 18, 2025: MIGRATION: Successfully completed migration from Replit Agent to Replit environment
 - July 18, 2025: DATABASE: Created and configured PostgreSQL database with proper schema setup
 - July 18, 2025: AUTHENTICATION: Fixed admin authentication system with super admin user creation
