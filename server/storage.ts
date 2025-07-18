@@ -210,6 +210,57 @@ export class RailwayAPIStorage implements IStorage {
     }
   }
 
+  // Transform API response to match our schema field names
+  private transformAPIResponse(item: any, collectionName: CollectionName): any {
+    if (!item) return item;
+    
+    // Handle drug field name mappings
+    if (collectionName === 'drugs') {
+      const transformed = { ...item };
+      
+      // Map Railway API field names to our schema field names
+      if (item.side_effect !== undefined) {
+        transformed.sideEffect = item.side_effect;
+        delete transformed.side_effect;
+      }
+      if (item.drug_class !== undefined) {
+        transformed.class = item.drug_class;
+        delete transformed.drug_class;
+      }
+      if (item.other_info !== undefined) {
+        transformed.otherInfo = item.other_info;
+        delete transformed.other_info;
+      }
+      if (item.created_at !== undefined) {
+        // Convert created_at to our timestamp format if needed
+        transformed.createdAt = item.created_at;
+        delete transformed.created_at;
+      }
+      
+      return transformed;
+    }
+    
+    // Handle word field name mappings
+    if (collectionName === 'words') {
+      const transformed = { ...item };
+      
+      // Map snake_case to camelCase for consistency
+      if (item.is_saved !== undefined) {
+        transformed.isSaved = item.is_saved;
+        delete transformed.is_saved;
+      }
+      if (item.is_favorite !== undefined) {
+        transformed.isFavorite = item.is_favorite;
+        delete transformed.is_favorite;
+      }
+      
+      return transformed;
+    }
+    
+    // For other collections, return as-is
+    return item;
+  }
+
   async getCollection<T>(collectionName: CollectionName): Promise<T[]> {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
@@ -217,8 +268,19 @@ export class RailwayAPIStorage implements IStorage {
       // Use the new pagination support to get all items
       const allItems = await this.getAllItems<T>(endpoint);
       
-      console.log(`Fetched ${allItems.length} items from ${collectionName}`);
-      return allItems;
+      // Transform API field names to match our schema
+      console.log(`Transforming ${allItems.length} items for ${collectionName}`);
+      const transformedItems = allItems.map((item) => {
+        try {
+          return this.transformAPIResponse(item, collectionName);
+        } catch (error) {
+          console.error(`Error transforming item:`, error);
+          return item; // Return original item if transformation fails
+        }
+      });
+      
+      console.log(`Fetched ${transformedItems.length} items from ${collectionName}`);
+      return transformedItems as T[];
     } catch (error) {
       console.error(`Error getting ${collectionName}:`, error);
       return [];
@@ -229,20 +291,22 @@ export class RailwayAPIStorage implements IStorage {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
       
-      // For dictionary/words, the API uses name-based endpoints, not ID-based
-      if (collectionName === 'words') {
-        // Try to find the word by ID first from the collection
-        const allWords = await this.getCollection<T>(collectionName);
-        const word = allWords.find((item: any) => item.id === id);
-        if (word) {
-          // Use the word name for the API call
-          const wordName = (word as any).name;
-          return await this.makeRequest(`${endpoint}/${encodeURIComponent(wordName)}`);
+      // For dictionary/words and drugs, the API uses name-based endpoints, not ID-based
+      if (collectionName === 'words' || collectionName === 'drugs') {
+        // Try to find the item by ID first from the collection
+        const allItems = await this.getCollection<T>(collectionName);
+        const item = allItems.find((item: any) => item.id === id);
+        if (item) {
+          // Use the item name for the API call
+          const itemName = (item as any).name;
+          const response = await this.makeRequest(`${endpoint}/${encodeURIComponent(itemName)}`);
+          return this.transformAPIResponse(response, collectionName);
         }
         return null;
       }
       
-      return await this.makeRequest(`${endpoint}/${id}`);
+      const response = await this.makeRequest(`${endpoint}/${id}`);
+      return this.transformAPIResponse(response, collectionName);
     } catch (error) {
       console.error(`Error getting document ${id} from ${collectionName}:`, error);
       return null;
@@ -266,20 +330,20 @@ export class RailwayAPIStorage implements IStorage {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
       
-      // For dictionary/words, the API uses name-based endpoints, not ID-based
-      if (collectionName === 'words') {
-        // Try to find the word by ID first from the collection
-        const allWords = await this.getCollection<T>(collectionName);
-        const word = allWords.find((item: any) => item.id === id);
-        if (word) {
-          // Use the word name for the API call
-          const wordName = (word as any).name;
-          return await this.makeRequest(`${endpoint}/${encodeURIComponent(wordName)}`, {
+      // For dictionary/words and drugs, the API uses name-based endpoints, not ID-based
+      if (collectionName === 'words' || collectionName === 'drugs') {
+        // Try to find the item by ID first from the collection
+        const allItems = await this.getCollection<T>(collectionName);
+        const item = allItems.find((item: any) => item.id === id);
+        if (item) {
+          // Use the item name for the API call
+          const itemName = (item as any).name;
+          return await this.makeRequest(`${endpoint}/${encodeURIComponent(itemName)}`, {
             method: 'PUT',
             body: JSON.stringify(data),
           });
         }
-        throw new Error(`Word with ID ${id} not found`);
+        throw new Error(`Item with ID ${id} not found in ${collectionName}`);
       }
       
       return await this.makeRequest(`${endpoint}/${id}`, {
@@ -296,20 +360,20 @@ export class RailwayAPIStorage implements IStorage {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
       
-      // For dictionary/words, the API uses name-based endpoints, not ID-based
-      if (collectionName === 'words') {
-        // Try to find the word by ID first from the collection
-        const allWords = await this.getCollection<any>(collectionName);
-        const word = allWords.find((item: any) => item.id === id);
-        if (word) {
-          // Use the word name for the API call
-          const wordName = (word as any).name;
-          await this.makeRequest(`${endpoint}/${encodeURIComponent(wordName)}`, {
+      // For dictionary/words and drugs, the API uses name-based endpoints, not ID-based
+      if (collectionName === 'words' || collectionName === 'drugs') {
+        // Try to find the item by ID first from the collection
+        const allItems = await this.getCollection<any>(collectionName);
+        const item = allItems.find((item: any) => item.id === id);
+        if (item) {
+          // Use the item name for the API call
+          const itemName = (item as any).name;
+          await this.makeRequest(`${endpoint}/${encodeURIComponent(itemName)}`, {
             method: 'DELETE',
           });
           return;
         }
-        throw new Error(`Word with ID ${id} not found`);
+        throw new Error(`Item with ID ${id} not found in ${collectionName}`);
       }
       
       await this.makeRequest(`${endpoint}/${id}`, {
