@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
-import { storage } from "./storage";
+import { PostgreSQLStorage } from "./postgres-storage";
+const storage = new PostgreSQLStorage();
 import { 
   insertBookSchema, insertWordSchema, insertDiseaseSchema, insertDrugSchema,
   insertTutorialVideoSchema, insertStaffSchema, insertQuestionSchema,

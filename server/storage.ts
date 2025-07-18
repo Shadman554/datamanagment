@@ -671,4 +671,15 @@ export class RailwayAPIStorage implements IStorage {
   }
 }
 
-export const storage = new RailwayAPIStorage();
+import { PostgreSQLStorage } from './postgres-storage';
+
+// Check if we have a PostgreSQL database URL configured
+const databaseUrl = process.env.DATABASE_URL;
+
+if (databaseUrl) {
+  console.log('Using PostgreSQL storage');
+  export const storage = new PostgreSQLStorage();
+} else {
+  console.log('No DATABASE_URL found, falling back to Railway API storage');
+  export const storage = new RailwayAPIStorage();
+}

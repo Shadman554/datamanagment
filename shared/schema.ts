@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mysqlTable, text, varchar, timestamp, boolean, int, varchar as mysqlVarchar } from 'drizzle-orm/mysql-core';
+import { pgTable, text, varchar, timestamp, boolean, integer, serial, uuid } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Base timestamp schema
@@ -132,31 +132,20 @@ export const appLinkSchema = z.object({
   _exportedAt: z.string(),
 });
 
-// Insert schemas (for creating new records)
-export const insertBookSchema = bookSchema.omit({ id: true, _exportedAt: true });
-export const insertWordSchema = wordSchema.omit({ id: true, _exportedAt: true });
-export const insertDiseaseSchema = diseaseSchema.omit({ id: true, _exportedAt: true });
-export const insertDrugSchema = drugSchema.omit({ id: true, _exportedAt: true });
-export const insertTutorialVideoSchema = tutorialVideoSchema.omit({ id: true, _exportedAt: true });
-export const insertStaffSchema = staffSchema.omit({ id: true, _exportedAt: true });
-export const insertQuestionSchema = questionSchema.omit({ id: true, _exportedAt: true });
-export const insertNotificationSchema = notificationSchema.omit({ id: true, _exportedAt: true });
-export const insertUserSchema = userSchema.omit({ id: true, _exportedAt: true });
-export const insertNormalRangeSchema = normalRangeSchema.omit({ id: true, _exportedAt: true });
-export const insertAppLinkSchema = appLinkSchema.omit({ id: true, _exportedAt: true });
+// Move the import after table definitions
 
-// Types
-export type Book = z.infer<typeof bookSchema>;
-export type Word = z.infer<typeof wordSchema>;
-export type Disease = z.infer<typeof diseaseSchema>;
-export type Drug = z.infer<typeof drugSchema>;
-export type TutorialVideo = z.infer<typeof tutorialVideoSchema>;
-export type Staff = z.infer<typeof staffSchema>;
-export type Question = z.infer<typeof questionSchema>;
-export type Notification = z.infer<typeof notificationSchema>;
-export type User = z.infer<typeof userSchema>;
-export type NormalRange = z.infer<typeof normalRangeSchema>;
-export type AppLink = z.infer<typeof appLinkSchema>;
+// Types from Drizzle tables
+export type Book = typeof booksTable.$inferSelect;
+export type Word = typeof wordsTable.$inferSelect;
+export type Disease = typeof diseasesTable.$inferSelect;
+export type Drug = typeof drugsTable.$inferSelect;
+export type TutorialVideo = typeof tutorialVideosTable.$inferSelect;
+export type Staff = typeof staffTable.$inferSelect;
+export type Question = typeof questionsTable.$inferSelect;
+export type Notification = typeof notificationsTable.$inferSelect;
+export type User = typeof usersTable.$inferSelect;
+export type NormalRange = typeof normalRangesTable.$inferSelect;
+export type AppLink = typeof appLinksTable.$inferSelect;
 
 export type InsertBook = z.infer<typeof insertBookSchema>;
 export type InsertWord = z.infer<typeof insertWordSchema>;
@@ -200,9 +189,140 @@ export type CollectionData = {
 
 // ===== ADMIN AUTHENTICATION SYSTEM =====
 
+// PostgreSQL Tables for Veterinary Data
+
+// Books Table
+export const booksTable = pgTable('books', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: varchar('title', { length: 500 }).notNull(),
+  description: text('description'),
+  category: varchar('category', { length: 100 }),
+  coverImageUrl: varchar('cover_image_url', { length: 1000 }),
+  pdfUrl: varchar('pdf_url', { length: 1000 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Words/Dictionary Table
+export const wordsTable = pgTable('words', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 500 }).notNull(),
+  kurdish: varchar('kurdish', { length: 500 }),
+  arabic: varchar('arabic', { length: 500 }),
+  description: text('description'),
+  barcode: varchar('barcode', { length: 100 }),
+  isSaved: boolean('is_saved').default(false),
+  isFavorite: boolean('is_favorite').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Diseases Table
+export const diseasesTable = pgTable('diseases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 500 }).notNull(),
+  kurdish: varchar('kurdish', { length: 500 }),
+  symptoms: text('symptoms'),
+  cause: text('cause'),
+  control: text('control'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Drugs Table
+export const drugsTable = pgTable('drugs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 500 }).notNull(),
+  usage: text('usage'),
+  sideEffect: text('side_effect'),
+  otherInfo: text('other_info'),
+  class: varchar('class', { length: 200 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Tutorial Videos Table
+export const tutorialVideosTable = pgTable('tutorial_videos', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: varchar('title', { length: 500 }).notNull(),
+  videoId: varchar('video_id', { length: 200 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Staff Table
+export const staffTable = pgTable('staff', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 200 }).notNull(),
+  job: varchar('job', { length: 200 }),
+  description: text('description'),
+  photo: varchar('photo', { length: 1000 }),
+  facebook: varchar('facebook', { length: 500 }),
+  instagram: varchar('instagram', { length: 500 }),
+  snapchat: varchar('snapchat', { length: 500 }),
+  twitter: varchar('twitter', { length: 500 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Questions Table
+export const questionsTable = pgTable('questions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  text: text('text').notNull(),
+  userName: varchar('user_name', { length: 200 }),
+  userEmail: varchar('user_email', { length: 200 }),
+  userPhoto: varchar('user_photo', { length: 1000 }),
+  userId: varchar('user_id', { length: 200 }),
+  likes: integer('likes').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Notifications Table
+export const notificationsTable = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: varchar('title', { length: 500 }).notNull(),
+  body: text('body'),
+  imageUrl: varchar('image_url', { length: 1000 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Users Table
+export const usersTable = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  username: varchar('username', { length: 200 }).unique().notNull(),
+  todayPoints: integer('today_points').default(0),
+  totalPoints: integer('total_points').default(0),
+  lastUpdated: timestamp('last_updated').defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Normal Ranges Table
+export const normalRangesTable = pgTable('normal_ranges', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 200 }).notNull(),
+  unit: varchar('unit', { length: 50 }),
+  minValue: varchar('min_value', { length: 50 }),
+  maxValue: varchar('max_value', { length: 50 }),
+  species: varchar('species', { length: 100 }),
+  category: varchar('category', { length: 100 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// App Links Table
+export const appLinksTable = pgTable('app_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  url: varchar('url', { length: 1000 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Admin Users Table
-export const adminUsers = mysqlTable('admin_users', {
-  id: varchar('id', { length: 255 }).primaryKey(),
+export const adminUsers = pgTable('admin_users', {
+  id: uuid('id').primaryKey().defaultRandom(),
   username: varchar('username', { length: 50 }).unique().notNull(),
   email: varchar('email', { length: 255 }).unique().notNull(),
   password: varchar('password', { length: 255 }).notNull(),
@@ -210,33 +330,33 @@ export const adminUsers = mysqlTable('admin_users', {
   firstName: varchar('first_name', { length: 100 }),
   lastName: varchar('last_name', { length: 100 }),
   isActive: boolean('is_active').default(true),
-  createdAt: timestamp('created_at'),
-  updatedAt: timestamp('updated_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
   lastLoginAt: timestamp('last_login_at'),
 });
 
 // Activity Logs Table
-export const activityLogs = mysqlTable('activity_logs', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  adminId: varchar('admin_id', { length: 255 }).references(() => adminUsers.id).notNull(),
+export const activityLogs = pgTable('activity_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  adminId: uuid('admin_id').references(() => adminUsers.id).notNull(),
   action: varchar('action', { length: 50 }).notNull(), // 'create', 'update', 'delete'
   collection: varchar('collection', { length: 50 }).notNull(),
   documentId: varchar('document_id', { length: 255 }).notNull(),
   documentTitle: varchar('document_title', { length: 500 }),
   oldData: text('old_data'), // JSON string of previous data (for updates/deletes)
   newData: text('new_data'), // JSON string of new data (for creates/updates)
-  timestamp: timestamp('timestamp'),
+  timestamp: timestamp('timestamp').defaultNow(),
   ipAddress: varchar('ip_address', { length: 45 }),
   userAgent: text('user_agent'),
 });
 
 // Admin Sessions Table
-export const adminSessions = mysqlTable('admin_sessions', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  adminId: varchar('admin_id', { length: 255 }).references(() => adminUsers.id).notNull(),
+export const adminSessions = pgTable('admin_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  adminId: uuid('admin_id').references(() => adminUsers.id).notNull(),
   sessionToken: varchar('session_token', { length: 255 }).unique().notNull(),
   expiresAt: timestamp('expires_at').notNull(),
-  createdAt: timestamp('created_at'),
+  createdAt: timestamp('created_at').defaultNow(),
   ipAddress: varchar('ip_address', { length: 45 }),
   userAgent: text('user_agent'),
 });
@@ -319,3 +439,18 @@ export type InsertAdminUser = z.infer<typeof insertAdminUserSchema>;
 export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 export type InsertAdminSession = z.infer<typeof insertAdminSessionSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
+
+// Drizzle insert schemas for PostgreSQL tables (after table definitions)
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+
+export const insertBookSchema = createInsertSchema(booksTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertWordSchema = createInsertSchema(wordsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertDiseaseSchema = createInsertSchema(diseasesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertDrugSchema = createInsertSchema(drugsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTutorialVideoSchema = createInsertSchema(tutorialVideosTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertStaffSchema = createInsertSchema(staffTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertQuestionSchema = createInsertSchema(questionsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertNotificationSchema = createInsertSchema(notificationsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertNormalRangeSchema = createInsertSchema(normalRangesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAppLinkSchema = createInsertSchema(appLinksTable).omit({ id: true, createdAt: true, updatedAt: true });
