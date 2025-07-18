@@ -47,13 +47,58 @@ export interface IStorage {
 export class RailwayAPIStorage implements IStorage {
   private baseURL = 'https://python-database-production.up.railway.app';
   private authToken: string | null = null;
+  private tokenExpiry: number | null = null;
+
+  // Authenticate with Railway API
+  private async authenticate(): Promise<void> {
+    if (this.authToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
+      return; // Token is still valid
+    }
+
+    try {
+      // Use a default admin account for API operations
+      const loginResponse = await fetch(`${this.baseURL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: 'admin',
+          password: 'admin123' // This should be configured as an env variable
+        }),
+      });
+
+      if (loginResponse.ok) {
+        const authData = await loginResponse.json();
+        this.authToken = authData.access_token;
+        // JWT tokens typically expire in 1 hour, set expiry a bit earlier
+        this.tokenExpiry = Date.now() + (50 * 60 * 1000); // 50 minutes
+        console.log('Successfully authenticated with Railway API');
+      } else {
+        console.warn('Failed to authenticate with Railway API, proceeding without auth');
+        this.authToken = null;
+        this.tokenExpiry = null;
+      }
+    } catch (error) {
+      console.error('Authentication error:', error);
+      this.authToken = null;
+      this.tokenExpiry = null;
+    }
+  }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+    // Ensure we have a valid auth token
+    await this.authenticate();
+    
     const url = `${this.baseURL}${endpoint}`;
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
     };
+
+    // Add any additional headers from options
+    if (options.headers) {
+      Object.assign(headers, options.headers);
+    }
 
     // Add auth token if available
     if (this.authToken) {
@@ -316,10 +361,15 @@ export class RailwayAPIStorage implements IStorage {
   async createDocument<T>(collectionName: CollectionName, data: any): Promise<T> {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
-      return await this.makeRequest(endpoint, {
+      console.log(`Creating document in ${collectionName}:`, data);
+      
+      const result = await this.makeRequest(endpoint, {
         method: 'POST',
         body: JSON.stringify(data),
       });
+      
+      console.log(`Successfully created document in ${collectionName}:`, result);
+      return result;
     } catch (error) {
       console.error(`Error creating document in ${collectionName}:`, error);
       throw error;
@@ -329,6 +379,7 @@ export class RailwayAPIStorage implements IStorage {
   async updateDocument<T>(collectionName: CollectionName, id: string, data: any): Promise<T> {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
+      console.log(`Updating document ${id} in ${collectionName}:`, data);
       
       // For dictionary/words and drugs, the API uses name-based endpoints, not ID-based
       if (collectionName === 'words' || collectionName === 'drugs') {
@@ -338,18 +389,26 @@ export class RailwayAPIStorage implements IStorage {
         if (item) {
           // Use the item name for the API call
           const itemName = (item as any).name;
-          return await this.makeRequest(`${endpoint}/${encodeURIComponent(itemName)}`, {
+          console.log(`Using name-based endpoint for ${collectionName}: ${itemName}`);
+          
+          const result = await this.makeRequest(`${endpoint}/${encodeURIComponent(itemName)}`, {
             method: 'PUT',
             body: JSON.stringify(data),
           });
+          
+          console.log(`Successfully updated document in ${collectionName}:`, result);
+          return result;
         }
         throw new Error(`Item with ID ${id} not found in ${collectionName}`);
       }
       
-      return await this.makeRequest(`${endpoint}/${id}`, {
+      const result = await this.makeRequest(`${endpoint}/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
+      
+      console.log(`Successfully updated document in ${collectionName}:`, result);
+      return result;
     } catch (error) {
       console.error(`Error updating document ${id} in ${collectionName}:`, error);
       throw error;
