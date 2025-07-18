@@ -251,7 +251,7 @@ export class SecureAuthService {
         return { error: 'Invalid credentials' };
       }
 
-      if (!admin.isActive) {
+      if (!admin.is_active) {
         this.recordFailedAttempt(ipAddress);
         console.log(`🚨 Login attempt for disabled account: ${sanitizedUsername} from IP: ${ipAddress}`);
         return { error: 'Account is disabled' };
