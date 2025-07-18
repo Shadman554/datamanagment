@@ -98,16 +98,17 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Test database connection
+  // Test PostgreSQL database connection directly
   try {
-    console.log('Testing database connection...');
-    const { setupDatabase } = await import('./setup-db');
-    const dbConnected = await setupDatabase();
+    console.log('Testing PostgreSQL database connection...');
+    const { client } = await import('./db');
     
-    if (dbConnected) {
-      console.log('✅ PostgreSQL database is active');
+    if (client) {
+      // Test the connection
+      await client`SELECT 1`;
+      console.log('✅ PostgreSQL database is active and connected');
     } else {
-      console.log('⚠️ PostgreSQL not available, trying Railway API...');
+      console.log('⚠️ PostgreSQL not available, falling back to Railway API...');
       const response = await fetch('https://python-database-production.up.railway.app/api/books/');
       if (response.ok) {
         console.log('Railway API connected successfully!');
@@ -118,7 +119,7 @@ app.use((req, res, next) => {
     }
   } catch (error: any) {
     console.error('Database connection test failed:', error?.message || error);
-    console.warn('⚠️ Application may not work without database connection');
+    console.log('⚠️ PostgreSQL connection failed, falling back to Railway API');
   }
 
   // Run production setup if needed

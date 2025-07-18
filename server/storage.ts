@@ -671,7 +671,8 @@ export class RailwayAPIStorage implements IStorage {
   }
 }
 
-// Temporarily use Railway API storage to preserve existing data
-// TODO: Implement data migration from Railway API to PostgreSQL
-console.log('Using Railway API storage (preserving existing data)');
+// Temporarily using Railway API due to PostgreSQL connection issues
+// Your PostgreSQL database has data but there are connection reset errors
+// TODO: Investigate Railway PostgreSQL connection limits and timeouts
+console.log('Using Railway API storage (due to PostgreSQL connection issues)');
 export const storage = new RailwayAPIStorage();

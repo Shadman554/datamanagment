@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { db } from './db';
+import { client, db } from './db';
 import { 
   booksTable, wordsTable, diseasesTable, drugsTable, tutorialVideosTable,
   staffTable, questionsTable, notificationsTable, usersTable, 
@@ -13,46 +13,60 @@ import { IStorage } from './storage';
 
 export class PostgreSQLStorage implements IStorage {
   private async ensureDatabase() {
-    if (!db) {
-      throw new Error('Database connection not available');
+    if (!client) {
+      throw new Error('PostgreSQL database connection not available');
     }
-    return db;
+    return client;
   }
 
   private getTable(collectionName: CollectionName) {
+    // Map collection names to actual PostgreSQL table names from your database
     const tableMap = {
-      'books': booksTable,
-      'words': wordsTable,
-      'diseases': diseasesTable,
-      'drugs': drugsTable,
-      'tutorialVideos': tutorialVideosTable,
-      'staff': staffTable,
-      'questions': questionsTable,
-      'notifications': notificationsTable,
-      'users': usersTable,
-      'normalRanges': normalRangesTable,
-      'appLinks': appLinksTable
+      'books': 'books',
+      'words': 'dictionary_words', // Your table is called dictionary_words
+      'diseases': 'diseases',
+      'drugs': 'drugs',
+      'tutorialVideos': 'tutorial_videos',
+      'staff': 'staff',
+      'questions': 'questions',
+      'notifications': 'notifications',
+      'users': 'users',
+      'normalRanges': 'normal_ranges',
+      'appLinks': 'app_links'
     };
     return tableMap[collectionName];
   }
 
   async getCollection<T>(collectionName: CollectionName): Promise<T[]> {
-    try {
-      const database = await this.ensureDatabase();
-      const table = this.getTable(collectionName);
-      
-      if (!table) {
-        console.error(`Unknown collection: ${collectionName}`);
-        return [];
-      }
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        const database = await this.ensureDatabase();
+        const tableName = this.getTable(collectionName);
+        
+        if (!tableName) {
+          console.error(`Unknown collection: ${collectionName}`);
+          return [];
+        }
 
-      const result = await database.select().from(table);
-      console.log(`Fetched ${result.length} items from PostgreSQL ${collectionName}`);
-      return result as T[];
-    } catch (error) {
-      console.error(`Error fetching ${collectionName} from PostgreSQL:`, error);
-      return [];
+        // Use raw SQL to query the actual tables in your PostgreSQL database
+        const result = await database.unsafe(`SELECT * FROM ${tableName} LIMIT 100`);
+        console.log(`✅ Fetched ${result.length} items from PostgreSQL table ${tableName}`);
+        return result as T[];
+      } catch (error: any) {
+        retries--;
+        console.error(`Error fetching ${collectionName} from PostgreSQL (${retries} retries left):`, error.message);
+        
+        if (retries === 0) {
+          console.error(`❌ Failed to fetch ${collectionName} after all retries`);
+          return [];
+        }
+        
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
+    return [];
   }
 
   async getDocument<T>(collectionName: CollectionName, id: string): Promise<T | null> {
