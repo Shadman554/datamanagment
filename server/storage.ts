@@ -671,15 +671,7 @@ export class RailwayAPIStorage implements IStorage {
   }
 }
 
-import { PostgreSQLStorage } from './postgres-storage';
-
-// Check if we have a PostgreSQL database URL configured
-const databaseUrl = process.env.DATABASE_URL;
-
-if (databaseUrl) {
-  console.log('Using PostgreSQL storage');
-  export const storage = new PostgreSQLStorage();
-} else {
-  console.log('No DATABASE_URL found, falling back to Railway API storage');
-  export const storage = new RailwayAPIStorage();
-}
+// Temporarily use Railway API storage to preserve existing data
+// TODO: Implement data migration from Railway API to PostgreSQL
+console.log('Using Railway API storage (preserving existing data)');
+export const storage = new RailwayAPIStorage();
