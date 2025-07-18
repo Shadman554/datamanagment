@@ -228,6 +228,20 @@ export class RailwayAPIStorage implements IStorage {
   async getDocument<T>(collectionName: CollectionName, id: string): Promise<T | null> {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
+      
+      // For dictionary/words, the API uses name-based endpoints, not ID-based
+      if (collectionName === 'words') {
+        // Try to find the word by ID first from the collection
+        const allWords = await this.getCollection<T>(collectionName);
+        const word = allWords.find((item: any) => item.id === id);
+        if (word) {
+          // Use the word name for the API call
+          const wordName = (word as any).name;
+          return await this.makeRequest(`${endpoint}/${encodeURIComponent(wordName)}`);
+        }
+        return null;
+      }
+      
       return await this.makeRequest(`${endpoint}/${id}`);
     } catch (error) {
       console.error(`Error getting document ${id} from ${collectionName}:`, error);
@@ -251,6 +265,23 @@ export class RailwayAPIStorage implements IStorage {
   async updateDocument<T>(collectionName: CollectionName, id: string, data: any): Promise<T> {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
+      
+      // For dictionary/words, the API uses name-based endpoints, not ID-based
+      if (collectionName === 'words') {
+        // Try to find the word by ID first from the collection
+        const allWords = await this.getCollection<T>(collectionName);
+        const word = allWords.find((item: any) => item.id === id);
+        if (word) {
+          // Use the word name for the API call
+          const wordName = (word as any).name;
+          return await this.makeRequest(`${endpoint}/${encodeURIComponent(wordName)}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+          });
+        }
+        throw new Error(`Word with ID ${id} not found`);
+      }
+      
       return await this.makeRequest(`${endpoint}/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
@@ -264,6 +295,23 @@ export class RailwayAPIStorage implements IStorage {
   async deleteDocument(collectionName: CollectionName, id: string): Promise<void> {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
+      
+      // For dictionary/words, the API uses name-based endpoints, not ID-based
+      if (collectionName === 'words') {
+        // Try to find the word by ID first from the collection
+        const allWords = await this.getCollection<any>(collectionName);
+        const word = allWords.find((item: any) => item.id === id);
+        if (word) {
+          // Use the word name for the API call
+          const wordName = (word as any).name;
+          await this.makeRequest(`${endpoint}/${encodeURIComponent(wordName)}`, {
+            method: 'DELETE',
+          });
+          return;
+        }
+        throw new Error(`Word with ID ${id} not found`);
+      }
+      
       await this.makeRequest(`${endpoint}/${id}`, {
         method: 'DELETE',
       });
