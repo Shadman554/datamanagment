@@ -17,17 +17,17 @@ This is a full-stack web application built as an admin panel for managing a vete
 ### Backend Architecture
 - **Runtime**: Node.js with Express.js
 - **Language**: TypeScript with ES modules
-- **Database**: MySQL with Drizzle ORM
-- **File Storage**: Firebase Storage for images and PDFs
+- **Database**: Railway API (Python backend)
+- **File Storage**: Railway API for images and PDFs
 - **Authentication**: JWT-based admin authentication
 
 ## Key Components
 
 ### Database Layer
-- **ORM**: Drizzle ORM configured for MySQL
+- **API**: Railway API (Python FastAPI backend)
 - **Schema Location**: `shared/schema.ts` - contains all type definitions and validation schemas
-- **Migration System**: Database migrations stored in `./migrations` directory
-- **Provider**: Railway MySQL Database
+- **External API**: https://python-database-production.up.railway.app/docs
+- **Provider**: Railway hosted Python API
 
 ### Data Collections
 The system manages 11 distinct data collections:
@@ -44,7 +44,7 @@ The system manages 11 distinct data collections:
 - **App Links**: Download links for mobile applications
 
 ### File Management
-- **Storage**: Firebase Storage for images and PDFs
+- **Storage**: Railway API for images and PDFs
 - **Upload System**: Drag-and-drop file upload with progress tracking
 - **File Types**: Supports images (covers, photos) and PDFs (books, documents)
 - **Preview**: Image preview functionality for uploaded files
@@ -110,9 +110,7 @@ Super admins can view:
 ## External Dependencies
 
 ### Core Dependencies
-- **mysql2**: MySQL database connection
-- **drizzle-orm**: Type-safe database ORM
-- **firebase-admin**: Server-side Firebase integration
+- **Railway API**: External Python API for data operations
 - **@tanstack/react-query**: Server state management
 - **@hookform/resolvers**: Form validation integration
 - **zod**: Runtime type validation
@@ -157,16 +155,18 @@ The application is designed to be deployed on platforms that support Node.js wit
 
 ## Current Issues & Status
 
-### Firebase Connection - RESOLVED ✓
-**Status:** Firebase connection fully operational
-**Resolution:** Service account credentials properly configured via environment variables
-**Impact:** All new data now saves directly to Firebase database as intended
+### Railway API Integration - ACTIVE ✓
+**Status:** Railway API connection fully operational
+**Resolution:** Complete integration with Python FastAPI backend
+**Impact:** All data operations now use Railway API backend for storage and retrieval
 
 ## Recent Changes
 
 ```
 Recent Changes:
-- July 05, 2025: MIGRATION: Successfully completed migration from Replit Agent to standard Replit environment
+- July 18, 2025: MIGRATION: Successfully completed migration from Replit Agent to standard Replit environment
+- July 18, 2025: STORAGE: Replaced Firebase with Railway API integration for all data operations
+- July 18, 2025: API: Integrated with Railway Python API backend for comprehensive data management
 - July 05, 2025: STORAGE: Removed local/fallback storage system - application now uses Firebase exclusively
 - July 05, 2025: FIREBASE: Enhanced Firebase connection handling to gracefully manage missing credentials
 - July 05, 2025: MIGRATION: Successfully migrated from Replit Agent to standard Replit environment
@@ -203,13 +203,13 @@ Recent Changes:
 - July 04, 2025: Application migration completed successfully with full security
 ```
 
-## Next Steps for Firebase Connection
+## Railway API Integration Complete
 
-To connect to your live Firebase database:
-1. Verify Firebase private key format in your Firebase Console
-2. Regenerate service account key if needed
-3. Test connection will be re-enabled automatically when credentials work
-4. Data can be migrated from fallback to Firebase once connected
+The application now uses the Railway API for all data operations:
+1. ✅ Complete Firebase removal and cleanup
+2. ✅ Railway API integration for all collections
+3. ✅ Automatic mapping of collection names to API endpoints
+4. ✅ Error handling and fallback mechanisms for API failures
 
 ## Changelog
 

@@ -1,4 +1,4 @@
-// Using Firebase-only storage, removed fallback storage import
+// Using Railway API for data storage
 import type { 
   Book, Word, Disease, Drug, TutorialVideo, Staff, Question, 
   Notification, User, NormalRange, AppLink,
@@ -44,87 +44,98 @@ export interface IStorage {
   createAppLink(link: InsertAppLink): Promise<AppLink>;
 }
 
-export class FirebaseStorage implements IStorage {
-  private db: any = null;
-  
-  private async initializeFirebase() {
-    if (!this.db) {
-      try {
-        const { db, isFirebaseInitialized } = await import('./firebase');
-        if (!isFirebaseInitialized || !db) {
-          throw new Error('Firebase is not properly configured');
-        }
-        this.db = db;
-      } catch (error) {
-        console.error('Failed to initialize Firebase:', error);
-        throw error;
-      }
+export class RailwayAPIStorage implements IStorage {
+  private baseURL = 'https://python-database-production.up.railway.app';
+  private authToken: string | null = null;
+
+  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+    const url = `${this.baseURL}${endpoint}`;
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    // Add auth token if available
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`;
     }
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`API request failed (${response.status}): ${error}`);
+    }
+
+    // Handle empty responses
+    if (response.status === 204) {
+      return null;
+    }
+
+    return response.json();
   }
 
-  private generateId(): string {
-    return Date.now().toString();
-  }
-
-  private getExportedAt(): string {
-    return new Date().toISOString();
+  // Map our collection names to API endpoints
+  private getAPIEndpoint(collectionName: CollectionName): string {
+    const mapping = {
+      'books': '/api/books',
+      'words': '/api/dictionary',
+      'diseases': '/api/diseases',
+      'drugs': '/api/drugs',
+      'tutorialVideos': '/api/tutorial-videos',
+      'staff': '/api/staff',
+      'questions': '/api/questions',
+      'notifications': '/api/notifications',
+      'users': '/api/users',
+      'normalRanges': '/api/normal-ranges',
+      'appLinks': '/api/app-links'
+    };
+    return mapping[collectionName] || `/api/${collectionName}`;
   }
 
   async getCollection<T>(collectionName: CollectionName): Promise<T[]> {
     try {
-      await this.initializeFirebase();
-      const snapshot = await this.db.collection(collectionName).get();
-      return snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as T));
+      const endpoint = this.getAPIEndpoint(collectionName);
+      return await this.makeRequest(endpoint);
     } catch (error) {
       console.error(`Error getting ${collectionName}:`, error);
-      console.warn(`Returning empty array for ${collectionName} - Firebase not configured`);
       return [];
     }
   }
 
   async getDocument<T>(collectionName: CollectionName, id: string): Promise<T | null> {
     try {
-      await this.initializeFirebase();
-      const doc = await this.db.collection(collectionName).doc(id).get();
-      if (!doc.exists) return null;
-      return { id: doc.id, ...doc.data() } as T;
+      const endpoint = this.getAPIEndpoint(collectionName);
+      return await this.makeRequest(`${endpoint}/${id}`);
     } catch (error) {
       console.error(`Error getting document ${id} from ${collectionName}:`, error);
-      console.warn(`Returning null for document ${id} - Firebase not configured`);
       return null;
     }
   }
 
   async createDocument<T>(collectionName: CollectionName, data: any): Promise<T> {
     try {
-      await this.initializeFirebase();
-      const id = this.generateId();
-      const docData = {
-        ...data,
-        id,
-        _exportedAt: this.getExportedAt(),
-      };
-      
-      await this.db.collection(collectionName).doc(id).set(docData);
-      return docData as T;
+      const endpoint = this.getAPIEndpoint(collectionName);
+      return await this.makeRequest(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
     } catch (error) {
       console.error(`Error creating document in ${collectionName}:`, error);
-      throw new Error(`Failed to create document - Firebase not configured`);
+      throw error;
     }
   }
 
   async updateDocument<T>(collectionName: CollectionName, id: string, data: any): Promise<T> {
     try {
-      await this.initializeFirebase();
-      const updateData = {
-        ...data,
-        _exportedAt: this.getExportedAt(),
-      };
-      
-      await this.db.collection(collectionName).doc(id).update(updateData);
-      
-      const updatedDoc = await this.getDocument<T>(collectionName, id);
-      return updatedDoc as T;
+      const endpoint = this.getAPIEndpoint(collectionName);
+      return await this.makeRequest(`${endpoint}/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
     } catch (error) {
       console.error(`Error updating document ${id} in ${collectionName}:`, error);
       throw error;
@@ -133,8 +144,10 @@ export class FirebaseStorage implements IStorage {
 
   async deleteDocument(collectionName: CollectionName, id: string): Promise<void> {
     try {
-      await this.initializeFirebase();
-      await this.db.collection(collectionName).doc(id).delete();
+      const endpoint = this.getAPIEndpoint(collectionName);
+      await this.makeRequest(`${endpoint}/${id}`, {
+        method: 'DELETE',
+      });
     } catch (error) {
       console.error(`Error deleting document ${id} from ${collectionName}:`, error);
       throw error;
@@ -143,28 +156,24 @@ export class FirebaseStorage implements IStorage {
 
   async searchCollection<T>(collectionName: CollectionName, query: string, field?: string): Promise<T[]> {
     try {
-      await this.initializeFirebase();
-      let dbQuery = this.db.collection(collectionName);
+      // Get all documents first, then filter client-side
+      // The Railway API doesn't seem to have built-in search functionality
+      const allDocuments = await this.getCollection<T>(collectionName);
       
-      if (field) {
-        dbQuery = dbQuery.where(field, '>=', query).where(field, '<=', query + '\uf8ff');
-      }
+      if (!query) return allDocuments;
       
-      const snapshot = await dbQuery.get();
-      const results = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as T));
-      
-      // If no field specified, search across multiple fields
-      if (!field && query) {
-        return results.filter((item: any) => {
-          const searchText = JSON.stringify(item).toLowerCase();
-          return searchText.includes(query.toLowerCase());
-        });
-      }
-      
-      return results;
+      return allDocuments.filter((item: any) => {
+        if (field && item[field]) {
+          return item[field].toLowerCase().includes(query.toLowerCase());
+        }
+        
+        // Search across multiple fields if no specific field provided
+        const searchText = JSON.stringify(item).toLowerCase();
+        return searchText.includes(query.toLowerCase());
+      });
     } catch (error) {
       console.error(`Error searching ${collectionName}:`, error);
-      throw error;
+      return [];
     }
   }
 
@@ -258,4 +267,4 @@ export class FirebaseStorage implements IStorage {
   }
 }
 
-export const storage = new FirebaseStorage();
+export const storage = new RailwayAPIStorage();

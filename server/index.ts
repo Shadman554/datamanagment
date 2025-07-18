@@ -98,15 +98,19 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Test Firebase connection
+  // Test Railway API connection
   try {
-    console.log('Testing Firebase connection...');
-    const { db } = await import('./firebase');
-    console.log('Firebase connected successfully!');
-    console.log('Firebase-only storage is active');
+    console.log('Testing Railway API connection...');
+    const response = await fetch('https://python-database-production.up.railway.app/api/books/');
+    if (response.ok) {
+      console.log('Railway API connected successfully!');
+      console.log('Railway API storage is active');
+    } else {
+      console.warn('Railway API connection issue, status:', response.status);
+    }
   } catch (error: any) {
-    console.error('Firebase connection failed:', error?.message || error);
-    console.error('⚠️ Application will not work without Firebase connection');
+    console.error('Railway API connection failed:', error?.message || error);
+    console.warn('⚠️ Application may not work without Railway API connection');
   }
 
   // Run production setup if needed
