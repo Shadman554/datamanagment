@@ -309,16 +309,18 @@ export class SecureAuthService {
 
   // Get admin by ID
   static async getAdminById(adminId: string): Promise<AdminUser | null> {
-    if (!db) {
-      return fallbackAdmins.find(a => a.id === adminId && a.isActive) || null;
+    try {
+      // Try PostgreSQL first using storage layer
+      const admin = await storage.getAdminById(adminId);
+      if (admin) {
+        return admin;
+      }
+    } catch (error) {
+      console.log("Error fetching admin by ID from storage:", error);
     }
-
-    const [admin] = await db
-      .select()
-      .from(adminUsers)
-      .where(eq(adminUsers.id, adminId));
     
-    return admin || null;
+    // Fallback to local storage
+    return fallbackAdmins.find(a => a.id === adminId && a.isActive) || null;
   }
 
   // Invalidate session (logout)
@@ -486,6 +488,51 @@ export class SecureAuthService {
     console.log(`📝 Activity: ${activityData.action} ${activityData.collection} by ${activityData.adminId}`);
   }
 
+  // Get admin by ID
+  static async getAdminById(adminId: string): Promise<AdminUser | null> {
+    console.log(`🔍 SecureAuthService.getAdminById called with ID: ${adminId}`);
+    
+    try {
+      // Try PostgreSQL first using storage layer
+      console.log("📞 Calling storage.getAdminById...");
+      const admin = await storage.getAdminById(adminId);
+      console.log("📋 Storage result:", admin ? `Found user ${admin.username}` : 'No user found');
+      console.log("📋 Full admin object:", admin);
+      
+      if (admin) {
+        console.log("✅ Returning admin from storage:", admin.username);
+        
+        // Ensure the admin object has the correct field mapping
+        const normalizedAdmin = {
+          ...admin,
+          isActive: admin.isActive !== undefined ? admin.isActive : admin.is_active,
+          firstName: admin.firstName || admin.first_name || admin.username,
+          lastName: admin.lastName || admin.last_name || '',
+          email: admin.email || `${admin.username}@vet-dict.com`,
+          createdAt: admin.createdAt || admin.created_at,
+          updatedAt: admin.updatedAt || admin.updated_at,
+          lastLoginAt: admin.lastLoginAt || admin.last_login_at
+        };
+        
+        console.log("🔄 Normalized admin object:", {
+          id: normalizedAdmin.id,
+          username: normalizedAdmin.username,
+          isActive: normalizedAdmin.isActive,
+          is_active: normalizedAdmin.is_active
+        });
+        
+        return normalizedAdmin;
+      }
+    } catch (error) {
+      console.log("🚨 Error fetching admin by ID from storage:", error);
+    }
+    
+    // Fallback to local storage
+    const fallbackAdmin = fallbackAdmins.find(a => a.id === adminId && a.isActive);
+    console.log("🔄 Fallback admin:", fallbackAdmin ? `Found ${fallbackAdmin.username}` : 'Not found');
+    return fallbackAdmin || null;
+  }
+
   // Logout function
   static async logout(token: string): Promise<void> {
     try {
@@ -527,8 +574,19 @@ export const authenticateAdmin = async (req: AuthRequest, res: Response, next: N
     }
 
     const admin = await SecureAuthService.getAdminById(decoded.adminId);
+    console.log('🔍 Auth middleware received admin:', admin ? {
+      id: admin.id,
+      username: admin.username,
+      isActive: admin.isActive,
+      is_active: admin.is_active
+    } : 'null');
+    
     if (!admin || !admin.isActive) {
-      console.log(`🚨 Admin not found or disabled: ${decoded.adminId} from IP: ${ipAddress}`);
+      console.log(`🚨 Admin not found or disabled: ${decoded.adminId} from IP: ${ipAddress}`, {
+        adminExists: !!admin,
+        isActiveField: admin?.isActive,
+        is_activeField: admin?.is_active
+      });
       return res.status(401).json({ error: 'Access denied' });
     }
 

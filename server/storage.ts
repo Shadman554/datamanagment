@@ -46,6 +46,7 @@ export interface IStorage {
   // Admin methods
   getAdmins(): Promise<any[]>;
   getAdminByUsername(username: string): Promise<any>;
+  getAdminById(id: string): Promise<any>;
   createAdmin(adminData: any): Promise<any>;
   updateAdmin(id: string, adminData: any): Promise<any>;
   deleteAdmin(id: string): Promise<void>;
@@ -730,6 +731,13 @@ export class RailwayAPIStorage implements IStorage {
     return null;
   }
 
+  async getAdminById(id: string): Promise<any> {
+    if (id === 'admin_fallback_superadmin') {
+      return this.getAdminByUsername('superadmin');
+    }
+    return null;
+  }
+
   async createAdmin(adminData: any): Promise<any> {
     return { id: 'admin_fallback_superadmin', ...adminData };
   }
@@ -962,6 +970,11 @@ class SmartStorage implements IStorage {
   async getAdminByUsername(username: string): Promise<any> {
     const storage = await this.getActiveStorage();
     return storage.getAdminByUsername(username);
+  }
+
+  async getAdminById(id: string): Promise<any> {
+    const storage = await this.getActiveStorage();
+    return storage.getAdminById(id);
   }
 
   async createAdmin(adminData: any): Promise<any> {

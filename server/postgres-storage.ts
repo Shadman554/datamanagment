@@ -297,6 +297,40 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
+  async getAdminById(adminId: string): Promise<any> {
+    try {
+      const database = await this.ensureClient();
+      console.log('🔍 Looking for admin with ID:', adminId);
+      const result = await database`SELECT * FROM users WHERE id = ${adminId} LIMIT 1`;
+      console.log('📋 Query result:', result.length > 0 ? 'Found user' : 'No user found', result[0] || 'No data');
+      
+      if (result[0]) {
+        // Transform database field names to match AdminUser interface
+        const user = result[0];
+        const transformedUser = {
+          id: user.id,
+          username: user.username,
+          email: user.email || `${user.username}@vet-dict.com`,
+          password: user.password,
+          role: user.role || 'admin',
+          firstName: user.first_name || user.username,
+          lastName: user.last_name || '',
+          isActive: user.is_active, // Transform snake_case to camelCase
+          createdAt: user.created_at,
+          updatedAt: user.updated_at,
+          lastLoginAt: user.last_login_at
+        };
+        console.log('🔄 Transformed user object:', transformedUser);
+        return transformedUser;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching admin by ID from PostgreSQL:', error);
+      return null;
+    }
+  }
+
   async createAdmin(adminData: any): Promise<any> {
     try {
       const database = await this.ensureClient();
