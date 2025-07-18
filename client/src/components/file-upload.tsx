@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { useFileUpload } from '@/hooks/use-firebase';
+import { useFileUpload } from '@/hooks/use-collections';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, File, X, Image } from 'lucide-react';
 

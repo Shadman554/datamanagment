@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 interface SystemSettings {
-  firebaseEnabled: boolean;
+  railwayApiEnabled: boolean;
   autoBackup: boolean;
   backupFrequency: 'daily' | 'weekly' | 'monthly';
   maxFileSize: number;
@@ -91,16 +91,16 @@ export default function Settings() {
     },
   });
 
-  // Test Firebase connection
-  const testFirebaseMutation = useMutation({
+  // Test Railway API connection
+  const testRailwayMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/system/test-firebase', { method: 'POST' });
-      if (!response.ok) throw new Error('Firebase connection test failed');
+      const response = await fetch('/api/system/test-railway', { method: 'POST' });
+      if (!response.ok) throw new Error('Railway API connection test failed');
       return response.json();
     },
     onSuccess: (data) => {
       toast({
-        title: data.success ? "Firebase Connected" : "Firebase Failed",
+        title: data.success ? "Railway API Connected" : "Railway API Failed",
         description: data.message,
         variant: data.success ? "default" : "destructive",
       });
@@ -220,12 +220,12 @@ export default function Settings() {
             <CardContent className="space-y-4 md:space-y-6">
               <div className="flex flex-col space-y-3 md:flex-row md:items-center md:justify-between md:space-y-0">
                 <div className="space-y-1">
-                  <Label className="text-sm md:text-base">Firebase Integration</Label>
-                  <p className="text-xs md:text-sm text-gray-500">Enable Firebase for data storage</p>
+                  <Label className="text-sm md:text-base">Railway API Integration</Label>
+                  <p className="text-xs md:text-sm text-gray-500">Enable Railway API for data storage</p>
                 </div>
                 <Switch
-                  checked={settings?.firebaseEnabled || false}
-                  onCheckedChange={(checked) => handleSettingChange('firebaseEnabled', checked)}
+                  checked={settings?.railwayApiEnabled || false}
+                  onCheckedChange={(checked) => handleSettingChange('railwayApiEnabled', checked)}
                 />
               </div>
 
@@ -278,8 +278,8 @@ export default function Settings() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => testFirebaseMutation.mutate()}
-                  disabled={testFirebaseMutation.isPending}
+                  onClick={() => testRailwayMutation.mutate()}
+                  disabled={testRailwayMutation.isPending}
                   className="w-full md:w-auto"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />

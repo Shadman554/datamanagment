@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useCollection } from '@/hooks/use-firebase';
+import { useCollection } from '@/hooks/use-collections';
 import { getCollectionConfig } from '@/lib/collections';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';

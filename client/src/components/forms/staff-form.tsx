@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { insertStaffSchema } from '@shared/schema';
-import { useCreateDocument, useUpdateDocument } from '@/hooks/use-firebase';
+import { useCreateDocument, useUpdateDocument } from '@/hooks/use-collections';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

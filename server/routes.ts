@@ -627,7 +627,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/settings", async (req, res) => {
     try {
       const settings = {
-        firebaseEnabled: true, // Firebase is now configured and working
+        railwayApiEnabled: true, // Railway API is now configured and working
         autoBackup: false,
         backupFrequency: 'daily' as const,
         maxFileSize: 10,
@@ -684,39 +684,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Test Firebase connection
-  app.post("/api/system/test-firebase", async (req, res) => {
+  // Test Railway API connection
+  app.post("/api/system/test-railway", async (req, res) => {
     try {
-      // Test Firebase connection using the testFirebaseConnection function
-      const { testFirebaseConnection } = await import('./firebase-test');
-      const isConnected = await testFirebaseConnection();
-      
-      if (isConnected) {
-        res.json({
-          success: true,
-          message: "Firebase connection successful"
-        });
+      const response = await fetch('https://python-database-production.up.railway.app/api/books/');
+      if (response.ok) {
+        res.json({ success: true, message: "Railway API connection successful" });
       } else {
-        res.json({
-          success: false,
-          message: "Firebase connection failed"
-        });
+        res.status(500).json({ error: "Railway API connection failed", status: response.status });
       }
-    } catch (error: any) {
-      console.error("Error testing Firebase:", error);
-      
-      // Check if it's a quota error (which means connection is working)
-      if (error.code === 8 && error.details?.includes('Quota exceeded')) {
-        res.json({
-          success: true,
-          message: "Firebase connected successfully (quota limit reached)"
-        });
-      } else {
-        res.json({
-          success: false,
-          message: "Firebase connection failed: " + (error as Error).message
-        });
-      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to test Railway API connection" });
     }
   });
 

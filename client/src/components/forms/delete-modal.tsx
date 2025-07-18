@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useDeleteDocument, useBulkOperation } from '@/hooks/use-firebase';
+import { useDeleteDocument, useBulkOperation } from '@/hooks/use-collections';
 import { useToast } from '@/hooks/use-toast';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import type { CollectionName } from '@shared/schema';
