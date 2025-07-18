@@ -61,7 +61,17 @@ export class RailwayAPIStorage implements IStorage {
       const envPassword = process.env.RAILWAY_API_PASSWORD;
       const envToken = process.env.RAILWAY_API_TOKEN;
 
-      // If we have a direct token, use it
+      // Use the provided Railway API token directly
+      const railwayToken = '46894fc0-ac9a-4ad8-909a-19c0f6c226ef';
+      
+      if (railwayToken) {
+        this.authToken = railwayToken;
+        this.tokenExpiry = Date.now() + (24 * 60 * 60 * 1000); // 24 hours for API token
+        console.log('Using Railway API token directly');
+        return;
+      }
+
+      // If we have a direct token from environment, use it
       if (envToken) {
         this.authToken = envToken;
         this.tokenExpiry = Date.now() + (50 * 60 * 1000); // 50 minutes
@@ -99,8 +109,31 @@ export class RailwayAPIStorage implements IStorage {
         console.log('Registration failed, trying existing credentials');
       }
 
+      // Try to register shadman user first
+      try {
+        const registerShadmanResponse = await fetch(`${this.baseURL}/api/auth/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: 'shadman',
+            password: 'admin123',
+            email: 'shadman@example.com'
+          }),
+        });
+
+        if (registerShadmanResponse.ok) {
+          console.log('Successfully registered shadman user');
+          authCredentials.push({ username: 'shadman', password: 'admin123' });
+        }
+      } catch (error) {
+        console.log('Shadman registration failed, trying existing credentials');
+      }
+
       // Add fallback credentials
       authCredentials.push(
+        { username: 'shadman', password: 'admin123' },
         { username: 'admin', password: 'admin123' },
         { username: 'admin', password: 'admin' },
         { username: 'test', password: 'test123' }
