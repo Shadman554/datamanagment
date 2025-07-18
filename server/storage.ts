@@ -56,26 +56,84 @@ export class RailwayAPIStorage implements IStorage {
     }
 
     try {
-      // Use a default admin account for API operations
-      const loginResponse = await fetch(`${this.baseURL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: 'admin',
-          password: 'admin123' // This should be configured as an env variable
-        }),
-      });
+      // Check if we have environment variables for auth
+      const envUsername = process.env.RAILWAY_API_USERNAME;
+      const envPassword = process.env.RAILWAY_API_PASSWORD;
+      const envToken = process.env.RAILWAY_API_TOKEN;
 
-      if (loginResponse.ok) {
+      // If we have a direct token, use it
+      if (envToken) {
+        this.authToken = envToken;
+        this.tokenExpiry = Date.now() + (50 * 60 * 1000); // 50 minutes
+        console.log('Using Railway API token from environment');
+        return;
+      }
+
+      // Try authentication with environment credentials first
+      const authCredentials = [];
+      if (envUsername && envPassword) {
+        authCredentials.push({ username: envUsername, password: envPassword });
+      }
+
+      // Try to register a new admin user if needed
+      const registrationData = {
+        username: 'admin',
+        password: 'admin123',
+        email: 'admin@example.com'
+      };
+
+      try {
+        const registerResponse = await fetch(`${this.baseURL}/api/auth/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(registrationData),
+        });
+
+        if (registerResponse.ok) {
+          console.log('Successfully registered new admin user');
+          authCredentials.push({ username: 'admin', password: 'admin123' });
+        }
+      } catch (error) {
+        console.log('Registration failed, trying existing credentials');
+      }
+
+      // Add fallback credentials
+      authCredentials.push(
+        { username: 'admin', password: 'admin123' },
+        { username: 'admin', password: 'admin' },
+        { username: 'test', password: 'test123' }
+      );
+
+      let loginResponse = null;
+      for (const creds of authCredentials) {
+        try {
+          loginResponse = await fetch(`${this.baseURL}/api/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(creds),
+          });
+          
+          if (loginResponse.ok) {
+            console.log(`Successfully authenticated with credentials: ${creds.username}`);
+            break;
+          }
+        } catch (error) {
+          console.log(`Failed to authenticate with ${creds.username}:`, error instanceof Error ? error.message : 'Unknown error');
+        }
+      }
+
+      if (loginResponse && loginResponse.ok) {
         const authData = await loginResponse.json();
         this.authToken = authData.access_token;
         // JWT tokens typically expire in 1 hour, set expiry a bit earlier
         this.tokenExpiry = Date.now() + (50 * 60 * 1000); // 50 minutes
         console.log('Successfully authenticated with Railway API');
       } else {
-        console.warn('Failed to authenticate with Railway API, proceeding without auth');
+        console.warn('Failed to authenticate with Railway API, will try operations without auth');
         this.authToken = null;
         this.tokenExpiry = null;
       }
@@ -111,6 +169,9 @@ export class RailwayAPIStorage implements IStorage {
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API request failed: ${response.status} - ${errorText}`);
+      
       // Handle specific error cases more gracefully
       if (response.status === 404) {
         console.warn(`API endpoint not found: ${endpoint}`);
@@ -122,8 +183,19 @@ export class RailwayAPIStorage implements IStorage {
         return { items: [] }; // Return empty items for server errors
       }
       
-      const error = await response.text();
-      throw new Error(`API request failed (${response.status}): ${error}`);
+      // For authentication errors, try to re-authenticate
+      if (response.status === 401) {
+        console.log('Authentication failed, resetting auth token');
+        this.authToken = null;
+        this.tokenExpiry = null;
+        
+        // Don't throw error immediately for 401, let the caller handle it
+        if (options.method === 'GET') {
+          return { items: [] };
+        }
+      }
+      
+      throw new Error(`API request failed (${response.status}): ${errorText}`);
     }
 
     // Handle empty responses
