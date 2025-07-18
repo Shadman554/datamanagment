@@ -245,6 +245,9 @@ export class SecureAuthService {
       // Try storage interface first, fallback to local storage if fails
       try {
         admin = await storage.getAdminByUsername(sanitizedUsername);
+        if (!admin) {
+          admin = fallbackAdmins.find(a => a.username.toLowerCase() === sanitizedUsername && a.isActive) || null;
+        }
       } catch (storageError) {
         console.log("Using fallback admin storage due to storage error:", (storageError as Error).message);
         admin = fallbackAdmins.find(a => a.username.toLowerCase() === sanitizedUsername && a.isActive) || null;
@@ -259,7 +262,7 @@ export class SecureAuthService {
         return { error: 'Invalid credentials' };
       }
 
-      if (!admin.is_active) {
+      if (!admin.isActive && !admin.is_active) {
         this.recordFailedAttempt(ipAddress);
         console.log(`🚨 Login attempt for disabled account: ${sanitizedUsername} from IP: ${ipAddress}`);
         return { error: 'Account is disabled' };

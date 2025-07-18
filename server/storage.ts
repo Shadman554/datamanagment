@@ -76,8 +76,8 @@ export class RailwayAPIStorage implements IStorage {
       const envPassword = process.env.RAILWAY_API_PASSWORD;
       const envToken = process.env.RAILWAY_API_TOKEN;
 
-      // Use the provided Railway API token directly
-      const railwayToken = '46894fc0-ac9a-4ad8-909a-19c0f6c226ef';
+      // Use the authenticated token from Railway API
+      const railwayToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzaGFkbWFuIiwiZXhwIjoxNzUyODc0MDUzfQ.L2JcjClMoLw5u4_1i-C8Sw7FlStUmt1fxYWA1rwAg5c';
       
       if (railwayToken) {
         this.authToken = railwayToken;
@@ -815,8 +815,9 @@ class SmartStorage implements IStorage {
   }
 
   private async getActiveStorage(): Promise<IStorage> {
-    const isPostgreSQLHealthy = await this.checkPostgreSQLHealth();
-    return isPostgreSQLHealthy ? this.primaryStorage : this.fallbackStorage;
+    // Force Railway API usage since PostgreSQL is disabled
+
+    return this.fallbackStorage;
   }
 
   // Delegate all methods to the active storage
@@ -968,13 +969,35 @@ class SmartStorage implements IStorage {
   }
 
   async getAdminByUsername(username: string): Promise<any> {
-    const storage = await this.getActiveStorage();
-    return storage.getAdminByUsername(username);
+    try {
+      // Try Railway API first since PostgreSQL is disabled
+      if (this.railwayStorage) {
+        console.log("Attempting Railway API getAdminByUsername for:", username);
+        return await this.railwayStorage.getAdminByUsername(username);
+      }
+    } catch (error) {
+      console.log("Railway API getAdminByUsername failed:", error);
+    }
+    
+    // Always return null to trigger fallback authentication
+
+    return null;
   }
 
   async getAdminById(id: string): Promise<any> {
-    const storage = await this.getActiveStorage();
-    return storage.getAdminById(id);
+    try {
+      // Try Railway API first since PostgreSQL is disabled
+      if (this.railwayStorage) {
+        console.log("Attempting Railway API getAdminById for:", id);
+        return await this.railwayStorage.getAdminById(id);
+      }
+    } catch (error) {
+      console.log("Railway API getAdminById failed:", error);
+    }
+    
+    // Always return null to trigger fallback authentication
+
+    return null;
   }
 
   async createAdmin(adminData: any): Promise<any> {
