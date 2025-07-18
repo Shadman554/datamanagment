@@ -141,13 +141,13 @@ export class RailwayAPIStorage implements IStorage {
         if (initialItems.length === maxLimit) {
           console.log(`Got exactly ${maxLimit} items from ${endpoint}, fetching additional pages...`);
           
-          // Try offset-based pagination first (most common)
-          let offset = maxLimit;
+          // Use skip-based pagination (this works correctly with Railway API)
+          let skip = maxLimit;
           let pageNumber = 2;
           
           while (true) {
             try {
-              const url = `${endpoint}?offset=${offset}&limit=${maxLimit}`;
+              const url = `${endpoint}?skip=${skip}&limit=${maxLimit}`;
               const paginatedResponse = await this.makeRequest(url);
               
               let items: T[] = [];
@@ -159,19 +159,10 @@ export class RailwayAPIStorage implements IStorage {
               
               if (items.length === 0) break;
               
-              // Check for duplicates to avoid infinite loops
-              const firstNewItem = items[0] as any;
-              const isDuplicate = allItems.some((existingItem: any) => 
-                existingItem.id === firstNewItem.id || existingItem.name === firstNewItem.name
-              );
-              
-              if (isDuplicate) {
-                console.log(`Detected duplicate data at offset ${offset}, stopping pagination`);
-                break;
-              }
+              // No duplicate checking - let the API tell us when we've reached the end
               
               allItems.push(...items);
-              offset += maxLimit;
+              skip += maxLimit;
               pageNumber++;
               
               console.log(`Page ${pageNumber - 1}: fetched ${items.length} more items from ${endpoint} (total: ${allItems.length})`);
@@ -179,18 +170,18 @@ export class RailwayAPIStorage implements IStorage {
               // If we got less than maxLimit items, we've reached the end
               if (items.length < maxLimit) break;
               
-              // Safety limit to prevent infinite loops
-              if (offset > 10000) {
-                console.log(`Reached safety limit at offset ${offset}, stopping pagination`);
+              // Safety limit to prevent infinite loops - for 2444 items, we need at least 25 pages
+              if (skip > 5000) {
+                console.log(`Reached safety limit at skip ${skip}, stopping pagination`);
                 break;
               }
             } catch (error) {
-              console.log(`Pagination failed at offset ${offset}:`, error);
+              console.log(`Pagination failed at skip ${skip}:`, error);
               break;
             }
           }
           
-          console.log(`Successfully fetched ${allItems.length} items from ${endpoint} using offset-based pagination`);
+          console.log(`Successfully fetched ${allItems.length} items from ${endpoint} using skip-based pagination`);
         }
         
         return allItems;
