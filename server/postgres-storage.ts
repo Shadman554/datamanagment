@@ -278,7 +278,7 @@ export class PostgreSQLStorage implements IStorage {
   async getAdmins(): Promise<any[]> {
     try {
       const database = await this.ensureClient();
-      const result = await database`SELECT * FROM users WHERE role IN ('admin', 'super_admin') ORDER BY created_at DESC`;
+      const result = await database`SELECT * FROM users ORDER BY username`;
       return result;
     } catch (error) {
       console.error('Error fetching admins from PostgreSQL:', error);
@@ -289,7 +289,7 @@ export class PostgreSQLStorage implements IStorage {
   async getAdminByUsername(username: string): Promise<any> {
     try {
       const database = await this.ensureClient();
-      const result = await database`SELECT * FROM users WHERE username = ${username} AND role IN ('admin', 'super_admin') LIMIT 1`;
+      const result = await database`SELECT * FROM users WHERE username = ${username} LIMIT 1`;
       return result[0] || null;
     } catch (error) {
       console.error('Error fetching admin by username from PostgreSQL:', error);

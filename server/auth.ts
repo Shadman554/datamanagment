@@ -56,10 +56,18 @@ export class SecureAuthService {
   }
 
   // Timing attack resistant password verification
-  static async verifyPassword(password: string, hash: string): Promise<boolean> {
+  static async verifyPassword(password: string, storedPassword: string): Promise<boolean> {
     const randomDelay = Math.random() * 100 + 50; // 50-150ms random delay
     await new Promise(resolve => setTimeout(resolve, randomDelay));
-    return bcrypt.compare(password, hash);
+    
+    // Handle both bcrypt hashed passwords and plain text passwords
+    if (storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2y$')) {
+      // This is a bcrypt hash, use bcrypt comparison
+      return bcrypt.compare(password, storedPassword);
+    } else {
+      // This is plain text, use direct comparison (for legacy support)
+      return password === storedPassword;
+    }
   }
 
   // Rate limiting check
