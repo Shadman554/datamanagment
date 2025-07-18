@@ -42,9 +42,11 @@ export function DataTable({
   const config = getCollectionConfig(collection);
 
   // Deduplicate data to handle duplicate IDs
-  const deduplicatedData = data ? data.filter((item, index, self) => 
+  // Ensure data is always an array
+  const dataArray = Array.isArray(data) ? data : [];
+  const deduplicatedData = dataArray.filter((item, index, self) => 
     index === self.findIndex(i => i.id === item.id)
-  ) : [];
+  );
 
   if (isLoading) {
     return (

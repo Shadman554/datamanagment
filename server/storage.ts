@@ -66,6 +66,17 @@ export class RailwayAPIStorage implements IStorage {
     });
 
     if (!response.ok) {
+      // Handle specific error cases more gracefully
+      if (response.status === 404) {
+        console.warn(`API endpoint not found: ${endpoint}`);
+        return { items: [] }; // Return empty items for missing endpoints
+      }
+      
+      if (response.status === 500) {
+        console.error(`Server error for ${endpoint}, returning empty result`);
+        return { items: [] }; // Return empty items for server errors
+      }
+      
       const error = await response.text();
       throw new Error(`API request failed (${response.status}): ${error}`);
     }
@@ -96,10 +107,49 @@ export class RailwayAPIStorage implements IStorage {
     return mapping[collectionName] || `/api/${collectionName}`;
   }
 
+  // Check if endpoint exists and handle missing endpoints gracefully
+  private async isEndpointAvailable(endpoint: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'HEAD',
+        headers: this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  // Check if endpoint exists and handle missing endpoints gracefully
+  private async isEndpointAvailable(endpoint: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'HEAD',
+        headers: this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   async getCollection<T>(collectionName: CollectionName): Promise<T[]> {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
-      return await this.makeRequest(endpoint);
+      const response = await this.makeRequest(endpoint);
+      
+      // Handle different response formats from Railway API
+      if (response && response.items) {
+        // Response has items array (e.g. {items: [...], total: 10})
+        return response.items as T[];
+      } else if (Array.isArray(response)) {
+        // Response is directly an array
+        return response as T[];
+      } else {
+        // Unexpected format, return empty array
+        console.warn(`Unexpected response format for ${collectionName}:`, response);
+        return [];
+      }
     } catch (error) {
       console.error(`Error getting ${collectionName}:`, error);
       return [];
@@ -156,6 +206,15 @@ export class RailwayAPIStorage implements IStorage {
 
   async searchCollection<T>(collectionName: CollectionName, query: string, field?: string): Promise<T[]> {
     try {
+      // Check if endpoint exists first
+      const endpoint = this.getAPIEndpoint(collectionName);
+      const available = await this.isEndpointAvailable(endpoint);
+      
+      if (!available) {
+        console.warn(`Endpoint ${endpoint} not available, returning empty array`);
+        return [];
+      }
+      
       // Get all documents first, then filter client-side
       // The Railway API doesn't seem to have built-in search functionality
       const allDocuments = await this.getCollection<T>(collectionName);
