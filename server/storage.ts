@@ -141,63 +141,56 @@ export class RailwayAPIStorage implements IStorage {
         if (initialItems.length === maxLimit) {
           console.log(`Got exactly ${maxLimit} items from ${endpoint}, fetching additional pages...`);
           
-          // Try different pagination approaches to get remaining items
-          const paginationMethods = [
-            // Try offset-based pagination
-            (offset: number) => `${endpoint}?offset=${offset}&limit=${maxLimit}`,
-            // Try skip-based pagination  
-            (skip: number) => `${endpoint}?skip=${skip}&limit=${maxLimit}`,
-            // Try page-based pagination (1-indexed)
-            (page: number) => `${endpoint}?page=${page}&limit=${maxLimit}`,
-            // Try 0-indexed page-based pagination
-            (page: number) => `${endpoint}?page=${page - 1}&limit=${maxLimit}`
-          ];
+          // Try offset-based pagination first (most common)
+          let offset = maxLimit;
+          let pageNumber = 2;
           
-          for (let methodIndex = 0; methodIndex < paginationMethods.length; methodIndex++) {
-            const urlBuilder = paginationMethods[methodIndex];
-            let offset = maxLimit;
-            let pageNumber = 2; // Start from page 2 since we already have page 1
-            let foundMoreItems = false;
-            let tempItems: T[] = [...allItems]; // Keep original items in case this method fails
-            
-            while (true) {
-              try {
-                const url = methodIndex < 2 ? urlBuilder(offset) : urlBuilder(pageNumber);
-                const paginatedResponse = await this.makeRequest(url);
-                
-                let items: T[] = [];
-                if (paginatedResponse && paginatedResponse.items) {
-                  items = paginatedResponse.items;
-                } else if (Array.isArray(paginatedResponse)) {
-                  items = paginatedResponse;
-                }
-                
-                if (items.length === 0) break;
-                
-                tempItems.push(...items);
-                foundMoreItems = true;
-                offset += maxLimit;
-                pageNumber++;
-                
-                console.log(`Page ${pageNumber - 1}: fetched ${items.length} more items from ${endpoint}`);
-                
-                // If we got less than maxLimit items, we've reached the end
-                if (items.length < maxLimit) break;
-                
-                // Safety limit to prevent infinite loops
-                if (offset > 10000) break;
-              } catch (error) {
-                console.log(`Pagination method ${methodIndex} failed at offset ${offset}:`, error);
+          while (true) {
+            try {
+              const url = `${endpoint}?offset=${offset}&limit=${maxLimit}`;
+              const paginatedResponse = await this.makeRequest(url);
+              
+              let items: T[] = [];
+              if (paginatedResponse && paginatedResponse.items) {
+                items = paginatedResponse.items;
+              } else if (Array.isArray(paginatedResponse)) {
+                items = paginatedResponse;
+              }
+              
+              if (items.length === 0) break;
+              
+              // Check for duplicates to avoid infinite loops
+              const firstNewItem = items[0] as any;
+              const isDuplicate = allItems.some((existingItem: any) => 
+                existingItem.id === firstNewItem.id || existingItem.name === firstNewItem.name
+              );
+              
+              if (isDuplicate) {
+                console.log(`Detected duplicate data at offset ${offset}, stopping pagination`);
                 break;
               }
-            }
-            
-            // If we found more items with this method, use it and stop trying others
-            if (foundMoreItems) {
-              console.log(`Successfully used pagination method ${methodIndex} for ${endpoint}, total items: ${tempItems.length}`);
-              return tempItems;
+              
+              allItems.push(...items);
+              offset += maxLimit;
+              pageNumber++;
+              
+              console.log(`Page ${pageNumber - 1}: fetched ${items.length} more items from ${endpoint} (total: ${allItems.length})`);
+              
+              // If we got less than maxLimit items, we've reached the end
+              if (items.length < maxLimit) break;
+              
+              // Safety limit to prevent infinite loops
+              if (offset > 10000) {
+                console.log(`Reached safety limit at offset ${offset}, stopping pagination`);
+                break;
+              }
+            } catch (error) {
+              console.log(`Pagination failed at offset ${offset}:`, error);
+              break;
             }
           }
+          
+          console.log(`Successfully fetched ${allItems.length} items from ${endpoint} using offset-based pagination`);
         }
         
         return allItems;
