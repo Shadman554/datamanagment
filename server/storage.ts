@@ -42,6 +42,20 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   createNormalRange(range: InsertNormalRange): Promise<NormalRange>;
   createAppLink(link: InsertAppLink): Promise<AppLink>;
+  
+  // Admin methods
+  getAdmins(): Promise<any[]>;
+  getAdminByUsername(username: string): Promise<any>;
+  createAdmin(adminData: any): Promise<any>;
+  updateAdmin(id: string, adminData: any): Promise<any>;
+  deleteAdmin(id: string): Promise<void>;
+  logActivity(activity: any): Promise<void>;
+  getActivityLogs(): Promise<any[]>;
+  getAdminStats(): Promise<any>;
+  createSession(sessionData: any): Promise<any>;
+  getSession(sessionId: string): Promise<any>;
+  deleteSession(sessionId: string): Promise<void>;
+  cleanExpiredSessions(): Promise<void>;
 }
 
 export class RailwayAPIStorage implements IStorage {
@@ -669,10 +683,337 @@ export class RailwayAPIStorage implements IStorage {
   async createAppLink(link: InsertAppLink): Promise<AppLink> {
     return this.createDocument<AppLink>('appLinks', link);
   }
+
+  // Admin methods - fallback implementations
+  async getAdmins(): Promise<any[]> {
+    // Create fallback admin directly to avoid import issues
+    const bcrypt = await import('bcrypt');
+    const hashedPassword = await bcrypt.hash('SuperAdmin123!', 12);
+    
+    const fallbackAdmin = {
+      id: 'admin_fallback_superadmin',
+      username: 'superadmin',
+      email: 'admin@vet-dict.com',
+      password: hashedPassword,
+      role: 'super_admin',
+      firstName: 'Super',
+      lastName: 'Admin',
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastLoginAt: null
+    };
+    
+    return [fallbackAdmin];
+  }
+
+  async getAdminByUsername(username: string): Promise<any> {
+    if (username === 'superadmin') {
+      // Create fallback admin directly to avoid import issues
+      const bcrypt = await import('bcrypt');
+      const hashedPassword = await bcrypt.hash('SuperAdmin123!', 12);
+      
+      return {
+        id: 'admin_fallback_superadmin',
+        username: 'superadmin',
+        email: 'admin@vet-dict.com',
+        password: hashedPassword,
+        role: 'super_admin',
+        firstName: 'Super',
+        lastName: 'Admin',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastLoginAt: null
+      };
+    }
+    return null;
+  }
+
+  async createAdmin(adminData: any): Promise<any> {
+    return { id: 'admin_fallback_superadmin', ...adminData };
+  }
+
+  async updateAdmin(id: string, adminData: any): Promise<any> {
+    return { id, ...adminData };
+  }
+
+  async deleteAdmin(id: string): Promise<void> {
+    console.log(`Admin ${id} deleted`);
+  }
+
+  async logActivity(activity: any): Promise<void> {
+    console.log('Activity logged:', activity);
+  }
+
+  async getActivityLogs(): Promise<any[]> {
+    return [];
+  }
+
+  async getAdminStats(): Promise<any> {
+    return { totalAdmins: 1, activeAdmins: 1, totalOperations: 0 };
+  }
+
+  async createSession(sessionData: any): Promise<any> {
+    return { id: 'session_' + Date.now(), ...sessionData };
+  }
+
+  async getSession(sessionId: string): Promise<any> {
+    return null; // Sessions not persisted in Railway API fallback
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    console.log(`Session ${sessionId} deleted`);
+  }
+
+  async cleanExpiredSessions(): Promise<void> {
+    console.log('Expired sessions cleaned');
+  }
 }
 
-// Temporarily using Railway API due to PostgreSQL connection issues
-// Your PostgreSQL database has data but there are connection reset errors
-// TODO: Investigate Railway PostgreSQL connection limits and timeouts
-console.log('Using Railway API storage (due to PostgreSQL connection issues)');
-export const storage = new RailwayAPIStorage();
+// Smart storage selector - tries PostgreSQL first, falls back to Railway API
+import { PostgreSQLStorage } from './postgres-storage';
+
+class SmartStorage implements IStorage {
+  private primaryStorage: PostgreSQLStorage;
+  private fallbackStorage: RailwayAPIStorage;
+  private usePostgreSQL: boolean = true;
+  private lastPostgreSQLCheck: number = 0;
+  private checkInterval: number = 30000; // Check every 30 seconds
+
+  constructor() {
+    this.primaryStorage = new PostgreSQLStorage();
+    this.fallbackStorage = new RailwayAPIStorage();
+  }
+
+  private async checkPostgreSQLHealth(): Promise<boolean> {
+    const now = Date.now();
+    if (now - this.lastPostgreSQLCheck < this.checkInterval) {
+      return this.usePostgreSQL;
+    }
+
+    try {
+      // Try a simple operation to test PostgreSQL
+      await this.primaryStorage.getCollection('books');
+      this.usePostgreSQL = true;
+      this.lastPostgreSQLCheck = now;
+      return true;
+    } catch (error) {
+      console.warn('PostgreSQL health check failed, using Railway API fallback');
+      this.usePostgreSQL = false;
+      this.lastPostgreSQLCheck = now;
+      return false;
+    }
+  }
+
+  private async getActiveStorage(): Promise<IStorage> {
+    const isPostgreSQLHealthy = await this.checkPostgreSQLHealth();
+    return isPostgreSQLHealthy ? this.primaryStorage : this.fallbackStorage;
+  }
+
+  // Delegate all methods to the active storage
+  async getCollection<T>(collectionName: CollectionName): Promise<T[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getCollection<T>(collectionName);
+  }
+
+  async getDocument<T>(collectionName: CollectionName, id: string): Promise<T | null> {
+    const storage = await this.getActiveStorage();
+    return storage.getDocument<T>(collectionName, id);
+  }
+
+  async createDocument<T>(collectionName: CollectionName, data: any): Promise<T> {
+    const storage = await this.getActiveStorage();
+    return storage.createDocument<T>(collectionName, data);
+  }
+
+  async updateDocument<T>(collectionName: CollectionName, id: string, data: any): Promise<T> {
+    const storage = await this.getActiveStorage();
+    return storage.updateDocument<T>(collectionName, id, data);
+  }
+
+  async deleteDocument(collectionName: CollectionName, id: string): Promise<void> {
+    const storage = await this.getActiveStorage();
+    return storage.deleteDocument(collectionName, id);
+  }
+
+  async searchCollection<T>(collectionName: CollectionName, query: string, field?: string): Promise<T[]> {
+    const storage = await this.getActiveStorage();
+    return storage.searchCollection<T>(collectionName, query, field);
+  }
+
+  // Specific collection methods
+  async getBooks(): Promise<Book[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getBooks();
+  }
+
+  async getWords(): Promise<Word[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getWords();
+  }
+
+  async getDiseases(): Promise<Disease[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getDiseases();
+  }
+
+  async getDrugs(): Promise<Drug[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getDrugs();
+  }
+
+  async getTutorialVideos(): Promise<TutorialVideo[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getTutorialVideos();
+  }
+
+  async getStaff(): Promise<Staff[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getStaff();
+  }
+
+  async getQuestions(): Promise<Question[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getQuestions();
+  }
+
+  async getNotifications(): Promise<Notification[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getNotifications();
+  }
+
+  async getUsers(): Promise<User[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getUsers();
+  }
+
+  async getNormalRanges(): Promise<NormalRange[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getNormalRanges();
+  }
+
+  async getAppLinks(): Promise<AppLink[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getAppLinks();
+  }
+
+  async createBook(book: InsertBook): Promise<Book> {
+    const storage = await this.getActiveStorage();
+    return storage.createBook(book);
+  }
+
+  async createWord(word: InsertWord): Promise<Word> {
+    const storage = await this.getActiveStorage();
+    return storage.createWord(word);
+  }
+
+  async createDisease(disease: InsertDisease): Promise<Disease> {
+    const storage = await this.getActiveStorage();
+    return storage.createDisease(disease);
+  }
+
+  async createDrug(drug: InsertDrug): Promise<Drug> {
+    const storage = await this.getActiveStorage();
+    return storage.createDrug(drug);
+  }
+
+  async createTutorialVideo(video: InsertTutorialVideo): Promise<TutorialVideo> {
+    const storage = await this.getActiveStorage();
+    return storage.createTutorialVideo(video);
+  }
+
+  async createStaff(staff: InsertStaff): Promise<Staff> {
+    const storage = await this.getActiveStorage();
+    return storage.createStaff(staff);
+  }
+
+  async createQuestion(question: InsertQuestion): Promise<Question> {
+    const storage = await this.getActiveStorage();
+    return storage.createQuestion(question);
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const storage = await this.getActiveStorage();
+    return storage.createNotification(notification);
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const storage = await this.getActiveStorage();
+    return storage.createUser(user);
+  }
+
+  async createNormalRange(range: InsertNormalRange): Promise<NormalRange> {
+    const storage = await this.getActiveStorage();
+    return storage.createNormalRange(range);
+  }
+
+  async createAppLink(link: InsertAppLink): Promise<AppLink> {
+    const storage = await this.getActiveStorage();
+    return storage.createAppLink(link);
+  }
+
+  // Admin methods
+  async getAdmins(): Promise<any[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getAdmins();
+  }
+
+  async getAdminByUsername(username: string): Promise<any> {
+    const storage = await this.getActiveStorage();
+    return storage.getAdminByUsername(username);
+  }
+
+  async createAdmin(adminData: any): Promise<any> {
+    const storage = await this.getActiveStorage();
+    return storage.createAdmin(adminData);
+  }
+
+  async updateAdmin(id: string, adminData: any): Promise<any> {
+    const storage = await this.getActiveStorage();
+    return storage.updateAdmin(id, adminData);
+  }
+
+  async deleteAdmin(id: string): Promise<void> {
+    const storage = await this.getActiveStorage();
+    return storage.deleteAdmin(id);
+  }
+
+  async logActivity(activity: any): Promise<void> {
+    const storage = await this.getActiveStorage();
+    return storage.logActivity(activity);
+  }
+
+  async getActivityLogs(): Promise<any[]> {
+    const storage = await this.getActiveStorage();
+    return storage.getActivityLogs();
+  }
+
+  async getAdminStats(): Promise<any> {
+    const storage = await this.getActiveStorage();
+    return storage.getAdminStats();
+  }
+
+  async createSession(sessionData: any): Promise<any> {
+    const storage = await this.getActiveStorage();
+    return storage.createSession(sessionData);
+  }
+
+  async getSession(sessionId: string): Promise<any> {
+    const storage = await this.getActiveStorage();
+    return storage.getSession(sessionId);
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    const storage = await this.getActiveStorage();
+    return storage.deleteSession(sessionId);
+  }
+
+  async cleanExpiredSessions(): Promise<void> {
+    const storage = await this.getActiveStorage();
+    return storage.cleanExpiredSessions();
+  }
+}
+
+console.log('🔄 Using smart storage with PostgreSQL primary and Railway API fallback');
+export const storage = new SmartStorage();

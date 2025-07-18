@@ -36,7 +36,7 @@ async function initializeFallbackAdmin() {
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
-      lastLoginAt: null
+      lastLoginAt: undefined
     });
     console.log('✓ Fallback super admin user initialized');
   }
@@ -238,7 +238,7 @@ export class SecureAuthService {
       try {
         admin = await storage.getAdminByUsername(sanitizedUsername);
       } catch (storageError) {
-        console.log("Using fallback admin storage due to storage error:", storageError.message);
+        console.log("Using fallback admin storage due to storage error:", (storageError as Error).message);
         admin = fallbackAdmins.find(a => a.username.toLowerCase() === sanitizedUsername && a.isActive) || null;
       }
 
@@ -264,13 +264,13 @@ export class SecureAuthService {
       try {
         // Try to update via storage interface
         if (admin) {
-          const fallbackAdmin = fallbackAdmins.find(a => a.id === admin.id);
+          const fallbackAdmin = fallbackAdmins.find(a => a.id === admin!.id);
           if (fallbackAdmin) {
             fallbackAdmin.lastLoginAt = new Date();
           }
         }
       } catch (updateError) {
-        console.log("Warning: Could not update last login timestamp:", updateError.message);
+        console.log("Warning: Could not update last login timestamp:", (updateError as Error).message);
       }
 
       // Generate secure token
@@ -382,25 +382,6 @@ export class SecureAuthService {
       .where(eq(adminUsers.username, username));
     
     return admin || null;
-  }
-
-  // Get admin by ID
-  static async getAdminById(adminId: string): Promise<AdminUser | null> {
-    try {
-      if (!db) {
-        return fallbackAdmins.find(a => a.id === adminId) || null;
-      }
-
-      const [admin] = await db
-        .select()
-        .from(adminUsers)
-        .where(eq(adminUsers.id, adminId));
-      
-      return admin || null;
-    } catch (error) {
-      // If database fails, use fallback
-      return fallbackAdmins.find(a => a.id === adminId) || null;
-    }
   }
 
   // Get all admins (super admin only)

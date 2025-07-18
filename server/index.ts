@@ -122,22 +122,30 @@ app.use((req, res, next) => {
     console.log('⚠️ PostgreSQL connection failed, falling back to Railway API');
   }
 
-  // Run production setup if needed
+  // Run production setup if needed (only if PostgreSQL is available)
   if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL) {
     try {
-      console.log('🚀 Running production setup...');
-      const { execSync } = await import('child_process');
-      
-      console.log('📊 Running database migrations...');
-      execSync('npm run db:push', { stdio: 'inherit' });
-      
-      console.log('👤 Creating super admin account...');
-      execSync('node create-super-admin.js', { stdio: 'inherit' });
-      
-      console.log('✅ Production setup completed successfully!');
+      // First test if PostgreSQL is actually available
+      const { client } = await import('./db');
+      if (client) {
+        await client`SELECT 1`;
+        console.log('🚀 Running production setup...');
+        const { execSync } = await import('child_process');
+        
+        console.log('📊 Running database migrations...');
+        execSync('npm run db:push', { stdio: 'inherit' });
+        
+        console.log('👤 Creating super admin account...');
+        execSync('node create-super-admin.js', { stdio: 'inherit' });
+        
+        console.log('✅ Production setup completed successfully!');
+      } else {
+        console.log('⚠️ PostgreSQL unavailable - skipping migrations and super admin creation');
+        console.log('App will run with Railway API fallback storage');
+      }
     } catch (error: any) {
-      console.error('⚠️  Production setup warning:', error?.message || error);
-      console.log('Continuing with server startup...');
+      console.error('⚠️ PostgreSQL unavailable - skipping production setup:', error?.message || error);
+      console.log('App will run with Railway API fallback storage');
     }
   }
 

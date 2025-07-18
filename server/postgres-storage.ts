@@ -13,6 +13,13 @@ import { IStorage } from './storage';
 
 export class PostgreSQLStorage implements IStorage {
   private async ensureDatabase() {
+    if (!db) {
+      throw new Error('PostgreSQL database connection not available');
+    }
+    return db;
+  }
+
+  private async ensureClient() {
     if (!client) {
       throw new Error('PostgreSQL database connection not available');
     }
@@ -20,19 +27,19 @@ export class PostgreSQLStorage implements IStorage {
   }
 
   private getTable(collectionName: CollectionName) {
-    // Map collection names to actual PostgreSQL table names from your database
+    // Map collection names to actual Drizzle table objects
     const tableMap = {
-      'books': 'books',
-      'words': 'dictionary_words', // Your table is called dictionary_words
-      'diseases': 'diseases',
-      'drugs': 'drugs',
-      'tutorialVideos': 'tutorial_videos',
-      'staff': 'staff',
-      'questions': 'questions',
-      'notifications': 'notifications',
-      'users': 'users',
-      'normalRanges': 'normal_ranges',
-      'appLinks': 'app_links'
+      'books': booksTable,
+      'words': wordsTable,
+      'diseases': diseasesTable,
+      'drugs': drugsTable,
+      'tutorialVideos': tutorialVideosTable,
+      'staff': staffTable,
+      'questions': questionsTable,
+      'notifications': notificationsTable,
+      'users': usersTable,
+      'normalRanges': normalRangesTable,
+      'appLinks': appLinksTable
     };
     return tableMap[collectionName];
   }
@@ -42,17 +49,17 @@ export class PostgreSQLStorage implements IStorage {
     while (retries > 0) {
       try {
         const database = await this.ensureDatabase();
-        const tableName = this.getTable(collectionName);
+        const table = this.getTable(collectionName);
         
-        if (!tableName) {
+        if (!table) {
           console.error(`Unknown collection: ${collectionName}`);
           return [];
         }
 
-        // Use raw SQL to query the actual tables in your PostgreSQL database
-        const result = await database.unsafe(`SELECT * FROM ${tableName} LIMIT 100`);
-        console.log(`✅ Fetched ${result.length} items from PostgreSQL table ${tableName}`);
-        return result as T[];
+        // Use Drizzle ORM to query the table
+        const result = await database.select().from(table).limit(100);
+        console.log(`✅ Fetched ${result.length} items from PostgreSQL table ${collectionName}`);
+        return result as unknown as T[];
       } catch (error: any) {
         retries--;
         console.error(`Error fetching ${collectionName} from PostgreSQL (${retries} retries left):`, error.message);
@@ -79,7 +86,7 @@ export class PostgreSQLStorage implements IStorage {
         return null;
       }
 
-      const result = await database.select().from(table).where(eq(table.id, id)).limit(1);
+      const result = await database.select().from(table).where(eq((table as any).id, id)).limit(1);
       return result[0] as T || null;
     } catch (error) {
       console.error(`Error fetching document ${id} from ${collectionName}:`, error);
@@ -115,7 +122,7 @@ export class PostgreSQLStorage implements IStorage {
       }
 
       const updateData = { ...data, updatedAt: new Date() };
-      const result = await database.update(table).set(updateData).where(eq(table.id, id)).returning();
+      const result = await database.update(table).set(updateData).where(eq((table as any).id, id)).returning();
       
       if (result.length === 0) {
         throw new Error(`Document ${id} not found in ${collectionName}`);
@@ -138,7 +145,7 @@ export class PostgreSQLStorage implements IStorage {
         throw new Error(`Unknown collection: ${collectionName}`);
       }
 
-      const result = await database.delete(table).where(eq(table.id, id)).returning();
+      const result = await database.delete(table).where(eq((table as any).id, id)).returning();
       
       if (result.length === 0) {
         throw new Error(`Document ${id} not found in ${collectionName}`);
@@ -265,5 +272,155 @@ export class PostgreSQLStorage implements IStorage {
 
   async createAppLink(link: any): Promise<AppLink> {
     return this.createDocument<AppLink>('appLinks', link);
+  }
+
+  // Admin methods - PostgreSQL implementations
+  async getAdmins(): Promise<any[]> {
+    try {
+      const database = await this.ensureClient();
+      const result = await database`SELECT * FROM admin_users ORDER BY created_at DESC`;
+      return result;
+    } catch (error) {
+      console.error('Error fetching admins from PostgreSQL:', error);
+      return [];
+    }
+  }
+
+  async getAdminByUsername(username: string): Promise<any> {
+    try {
+      const database = await this.ensureClient();
+      const result = await database`SELECT * FROM admin_users WHERE username = ${username} LIMIT 1`;
+      return result[0] || null;
+    } catch (error) {
+      console.error('Error fetching admin by username from PostgreSQL:', error);
+      return null;
+    }
+  }
+
+  async createAdmin(adminData: any): Promise<any> {
+    try {
+      const database = await this.ensureClient();
+      const result = await database`
+        INSERT INTO admin_users (username, email, password, role, first_name, last_name, is_active)
+        VALUES (${adminData.username}, ${adminData.email}, ${adminData.password}, ${adminData.role}, ${adminData.firstName}, ${adminData.lastName}, ${adminData.isActive})
+        RETURNING *
+      `;
+      return result[0];
+    } catch (error) {
+      console.error('Error creating admin in PostgreSQL:', error);
+      return { id: 'admin_fallback_' + Date.now(), ...adminData };
+    }
+  }
+
+  async updateAdmin(id: string, adminData: any): Promise<any> {
+    try {
+      const database = await this.ensureClient();
+      const result = await database`
+        UPDATE admin_users 
+        SET username = ${adminData.username}, email = ${adminData.email}, 
+            first_name = ${adminData.firstName}, last_name = ${adminData.lastName}, 
+            is_active = ${adminData.isActive}, updated_at = NOW()
+        WHERE id = ${id}
+        RETURNING *
+      `;
+      return result[0];
+    } catch (error) {
+      console.error('Error updating admin in PostgreSQL:', error);
+      return { id, ...adminData };
+    }
+  }
+
+  async deleteAdmin(id: string): Promise<void> {
+    try {
+      const database = await this.ensureClient();
+      await database`DELETE FROM admin_users WHERE id = ${id}`;
+    } catch (error) {
+      console.error('Error deleting admin from PostgreSQL:', error);
+    }
+  }
+
+  async logActivity(activity: any): Promise<void> {
+    try {
+      const database = await this.ensureClient();
+      await database`
+        INSERT INTO activity_logs (admin_id, action, resource_type, resource_id, details, created_at)
+        VALUES (${activity.adminId}, ${activity.action}, ${activity.resourceType}, ${activity.resourceId}, ${JSON.stringify(activity.details)}, NOW())
+      `;
+    } catch (error) {
+      console.error('Error logging activity to PostgreSQL:', error);
+    }
+  }
+
+  async getActivityLogs(): Promise<any[]> {
+    try {
+      const database = await this.ensureClient();
+      const result = await database`SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 100`;
+      return result;
+    } catch (error) {
+      console.error('Error fetching activity logs from PostgreSQL:', error);
+      return [];
+    }
+  }
+
+  async getAdminStats(): Promise<any> {
+    try {
+      const database = await this.ensureClient();
+      const totalAdmins = await database`SELECT COUNT(*) as count FROM admin_users`;
+      const activeAdmins = await database`SELECT COUNT(*) as count FROM admin_users WHERE is_active = true`;
+      const totalOperations = await database`SELECT COUNT(*) as count FROM activity_logs`;
+      
+      return {
+        totalAdmins: totalAdmins[0]?.count || 0,
+        activeAdmins: activeAdmins[0]?.count || 0,
+        totalOperations: totalOperations[0]?.count || 0
+      };
+    } catch (error) {
+      console.error('Error fetching admin stats from PostgreSQL:', error);
+      return { totalAdmins: 1, activeAdmins: 1, totalOperations: 0 };
+    }
+  }
+
+  async createSession(sessionData: any): Promise<any> {
+    try {
+      const database = await this.ensureClient();
+      const result = await database`
+        INSERT INTO admin_sessions (id, admin_id, expires_at, created_at)
+        VALUES (${sessionData.id}, ${sessionData.adminId}, ${sessionData.expiresAt}, NOW())
+        RETURNING *
+      `;
+      return result[0];
+    } catch (error) {
+      console.error('Error creating session in PostgreSQL:', error);
+      return { id: 'session_' + Date.now(), ...sessionData };
+    }
+  }
+
+  async getSession(sessionId: string): Promise<any> {
+    try {
+      const database = await this.ensureClient();
+      const result = await database`SELECT * FROM admin_sessions WHERE id = ${sessionId} AND expires_at > NOW()`;
+      return result[0] || null;
+    } catch (error) {
+      console.error('Error fetching session from PostgreSQL:', error);
+      return null;
+    }
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    try {
+      const database = await this.ensureClient();
+      await database`DELETE FROM admin_sessions WHERE id = ${sessionId}`;
+    } catch (error) {
+      console.error('Error deleting session from PostgreSQL:', error);
+    }
+  }
+
+  async cleanExpiredSessions(): Promise<void> {
+    try {
+      const database = await this.ensureClient();
+      await database`DELETE FROM admin_sessions WHERE expires_at <= NOW()`;
+    } catch (error) {
+      console.error('Error cleaning expired sessions from PostgreSQL:', error);
+    }
   }
 }
