@@ -120,36 +120,121 @@ export class RailwayAPIStorage implements IStorage {
     }
   }
 
-  // Check if endpoint exists and handle missing endpoints gracefully
-  private async isEndpointAvailable(endpoint: string): Promise<boolean> {
+  // Fetch all items with pagination support
+  private async getAllItems<T>(endpoint: string): Promise<T[]> {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
-        method: 'HEAD',
-        headers: this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}
-      });
-      return response.ok;
-    } catch {
-      return false;
+      const allItems: T[] = [];
+      
+      // The API has a maximum limit of 100 items per request
+      const maxLimit = 100;
+      
+      // First, get the first page of items with proper limit
+      let response = await this.makeRequest(`${endpoint}?limit=${maxLimit}`);
+      
+      if (response && response.items) {
+        const initialItems = response.items;
+        allItems.push(...initialItems);
+        
+        console.log(`Fetched ${initialItems.length} items from first page of ${endpoint}`);
+        
+        // If we got exactly 100 items, there might be more pages
+        if (initialItems.length === maxLimit) {
+          console.log(`Got exactly ${maxLimit} items from ${endpoint}, fetching additional pages...`);
+          
+          // Try different pagination approaches to get remaining items
+          const paginationMethods = [
+            // Try offset-based pagination
+            (offset: number) => `${endpoint}?offset=${offset}&limit=${maxLimit}`,
+            // Try skip-based pagination  
+            (skip: number) => `${endpoint}?skip=${skip}&limit=${maxLimit}`,
+            // Try page-based pagination (1-indexed)
+            (page: number) => `${endpoint}?page=${page}&limit=${maxLimit}`,
+            // Try 0-indexed page-based pagination
+            (page: number) => `${endpoint}?page=${page - 1}&limit=${maxLimit}`
+          ];
+          
+          for (let methodIndex = 0; methodIndex < paginationMethods.length; methodIndex++) {
+            const urlBuilder = paginationMethods[methodIndex];
+            let offset = maxLimit;
+            let pageNumber = 2; // Start from page 2 since we already have page 1
+            let foundMoreItems = false;
+            let tempItems: T[] = [...allItems]; // Keep original items in case this method fails
+            
+            while (true) {
+              try {
+                const url = methodIndex < 2 ? urlBuilder(offset) : urlBuilder(pageNumber);
+                const paginatedResponse = await this.makeRequest(url);
+                
+                let items: T[] = [];
+                if (paginatedResponse && paginatedResponse.items) {
+                  items = paginatedResponse.items;
+                } else if (Array.isArray(paginatedResponse)) {
+                  items = paginatedResponse;
+                }
+                
+                if (items.length === 0) break;
+                
+                tempItems.push(...items);
+                foundMoreItems = true;
+                offset += maxLimit;
+                pageNumber++;
+                
+                console.log(`Page ${pageNumber - 1}: fetched ${items.length} more items from ${endpoint}`);
+                
+                // If we got less than maxLimit items, we've reached the end
+                if (items.length < maxLimit) break;
+                
+                // Safety limit to prevent infinite loops
+                if (offset > 10000) break;
+              } catch (error) {
+                console.log(`Pagination method ${methodIndex} failed at offset ${offset}:`, error);
+                break;
+              }
+            }
+            
+            // If we found more items with this method, use it and stop trying others
+            if (foundMoreItems) {
+              console.log(`Successfully used pagination method ${methodIndex} for ${endpoint}, total items: ${tempItems.length}`);
+              return tempItems;
+            }
+          }
+        }
+        
+        return allItems;
+      } else if (Array.isArray(response)) {
+        return response as T[];
+      } else {
+        console.warn(`Unexpected response format for ${endpoint}:`, response);
+        return [];
+      }
+    } catch (error) {
+      console.error(`Error fetching all items from ${endpoint}:`, error);
+      
+      // If the initial request failed, try without pagination parameters
+      try {
+        const fallbackResponse = await this.makeRequest(endpoint);
+        if (fallbackResponse && fallbackResponse.items) {
+          return fallbackResponse.items as T[];
+        } else if (Array.isArray(fallbackResponse)) {
+          return fallbackResponse as T[];
+        }
+      } catch (fallbackError) {
+        console.error(`Fallback request also failed for ${endpoint}:`, fallbackError);
+      }
+      
+      return [];
     }
   }
 
   async getCollection<T>(collectionName: CollectionName): Promise<T[]> {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
-      const response = await this.makeRequest(endpoint);
       
-      // Handle different response formats from Railway API
-      if (response && response.items) {
-        // Response has items array (e.g. {items: [...], total: 10})
-        return response.items as T[];
-      } else if (Array.isArray(response)) {
-        // Response is directly an array
-        return response as T[];
-      } else {
-        // Unexpected format, return empty array
-        console.warn(`Unexpected response format for ${collectionName}:`, response);
-        return [];
-      }
+      // Use the new pagination support to get all items
+      const allItems = await this.getAllItems<T>(endpoint);
+      
+      console.log(`Fetched ${allItems.length} items from ${collectionName}`);
+      return allItems;
     } catch (error) {
       console.error(`Error getting ${collectionName}:`, error);
       return [];
