@@ -216,10 +216,25 @@ export class RailwayAPIStorage implements IStorage {
       headers['Authorization'] = `Bearer ${tokenToUse}`;
     }
 
+    // For POST requests, log the full request details
+    if (options.method === 'POST') {
+      console.log(`🔥 POST request to: ${url}`);
+      console.log(`🔥 Headers:`, headers);
+      console.log(`🔥 Body:`, options.body);
+    }
+    
     const response = await fetch(url, {
       ...options,
       headers,
+      redirect: 'follow' // Explicitly follow redirects, which preserves POST body
     });
+    
+    // Log response details for POST requests
+    if (options.method === 'POST') {
+      console.log(`🔥 Response status: ${response.status}`);
+      console.log(`🔥 Response URL: ${response.url}`);
+      console.log(`🔥 Response headers:`, Object.fromEntries(response.headers.entries()));
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -266,8 +281,8 @@ export class RailwayAPIStorage implements IStorage {
     return response.json();
   }
 
-  // Map our collection names to API endpoints
-  private getAPIEndpoint(collectionName: CollectionName): string {
+  // Map our collection names to API endpoints - try alternative endpoints for POST
+  private getAPIEndpoint(collectionName: CollectionName, isCreate: boolean = false): string {
     const mapping = {
       'books': '/api/books',
       'words': '/api/dictionary',
@@ -281,7 +296,12 @@ export class RailwayAPIStorage implements IStorage {
       'normalRanges': '/api/normal-ranges',
       'appLinks': '/api/app-links'
     };
-    return mapping[collectionName] || `/api/${collectionName}`;
+    
+    // For create operations, ensure we use the exact endpoint without trailing slash
+    const baseEndpoint = mapping[collectionName] || `/api/${collectionName}`;
+    
+    // Remove any trailing slashes that might cause redirects
+    return baseEndpoint.replace(/\/$/, '');
   }
 
   // Check if endpoint exists and handle missing endpoints gracefully
@@ -491,43 +511,19 @@ export class RailwayAPIStorage implements IStorage {
   }
 
   async createDocument<T>(collectionName: CollectionName, data: any): Promise<T> {
+    console.log('🔥 CREATE DOCUMENT CALLED FOR:', collectionName);
+    console.log('🔥 INCOMING DATA:', JSON.stringify(data, null, 2));
+    
     try {
-      const endpoint = this.getAPIEndpoint(collectionName);
-      console.log(`Creating document in ${collectionName}:`, JSON.stringify(data, null, 2));
-      console.log(`Using endpoint: ${endpoint}`);
-      console.log(`Full URL: ${this.baseURL}${endpoint}`);
+      const endpoint = this.getAPIEndpoint(collectionName, true); // Pass true for create operation
+      console.log(`🔥 Creating document in ${collectionName}:`, JSON.stringify(data, null, 2));
+      console.log(`🔥 Using endpoint: ${endpoint}`);
+      console.log(`🔥 Full URL: ${this.baseURL}${endpoint}`);
       
-      // Try to understand what the Railway API actually expects by comparing with a working item
-      if (collectionName === 'diseases') {
-        console.log('==== DEBUGGING DISEASE CREATE ====');
-        console.log('Data we are sending:', JSON.stringify(data, null, 2));
-        
-        // First, let's get an existing disease to see the exact format
-        const existingItems = await this.makeRequest(endpoint + '?limit=1');
-        if (existingItems && existingItems.items && existingItems.items.length > 0) {
-          console.log('Existing disease format:', JSON.stringify(existingItems.items[0], null, 2));
-          
-          // Try to match the exact field names from existing data
-          const existingItem = existingItems.items[0];
-          const transformedData = {
-            name: data.name,
-            kurdish: data.kurdish || data.Kurdish || '',  // Handle both cases
-            symptoms: data.symptoms || data.Symptoms || '',
-            cause: data.cause || data.Cause || '',
-            control: data.control || data.Control || ''
-          };
-          
-          console.log('Transformed data to match existing format:', JSON.stringify(transformedData, null, 2));
-          
-          const result = await this.makeRequest(endpoint, {
-            method: 'POST',
-            body: JSON.stringify(transformedData),
-          });
-          
-          console.log('Create result:', JSON.stringify(result, null, 2));
-          return result;
-        }
-      }
+      // Handle the 307 redirect issue - Railway API might be redirecting POST requests
+      // Let's try the correct endpoint format that works for other operations
+      console.log('🔥 Attempting create with authentication...');
+      await this.authenticate(); // Ensure we have a valid token
       
       const result = await this.makeRequest(endpoint, {
         method: 'POST',
