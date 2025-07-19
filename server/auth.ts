@@ -7,6 +7,7 @@ import { adminUsers, adminSessions, activityLogs } from '@shared/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import type { AdminUser, InsertAdminUser, InsertActivityLog } from '@shared/schema';
 import type { Request, Response, NextFunction } from 'express';
+import { RailwayAuth } from './railway-auth';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
 const SALT_ROUNDS = 12; // Military-grade password hashing
@@ -237,6 +238,67 @@ export class SecureAuthService {
       this.recordFailedAttempt(ipAddress);
       console.log(`🚨 Invalid username format from IP: ${ipAddress}`);
       return { error: 'Invalid credentials' };
+    }
+
+    // First try Railway API authentication
+    try {
+      const railwayAuth = await RailwayAuth.verifyAdminCredentials(sanitizedUsername, password);
+      if (railwayAuth.success) {
+        // Clear failed attempts on successful login
+        this.clearFailedAttempts(ipAddress);
+
+        // Create admin user object from Railway API response
+        const admin: AdminUser = {
+          id: `railway_${sanitizedUsername}`,
+          username: sanitizedUsername,
+          email: `${sanitizedUsername}@vet-dict.com`,
+          password: '', // Don't store password
+          role: 'super_admin', // Give admin role for Railway API users
+          firstName: 'Admin',
+          lastName: 'User',
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastLoginAt: new Date()
+        };
+
+        // Generate secure token with Railway token
+        const sessionId = this.generateSecureToken();
+        const tokenPayload = {
+          adminId: admin.id,
+          sessionId,
+          type: 'admin',
+          iat: Math.floor(Date.now() / 1000),
+          ipHash: crypto.createHash('sha256').update(ipAddress).digest('hex'),
+          userAgentHash: crypto.createHash('sha256').update(userAgent).digest('hex')
+        };
+
+        // Store active session with Railway token
+        activeSessions.set(sessionId, {
+          adminId: admin.id,
+          createdAt: new Date(),
+          lastActivity: new Date(),
+          ipAddress,
+          userAgent,
+          railwayToken: railwayAuth.token
+        });
+
+        const token = jwt.sign(tokenPayload, JWT_SECRET, { 
+          expiresIn: '2h',
+          issuer: 'vet-dict-admin',
+          audience: 'vet-dict-admin-panel'
+        });
+
+        console.log(`✅ Successful Railway API login: ${admin.username} from IP: ${ipAddress}`);
+
+        return { 
+          admin,
+          token,
+          message: 'Login successful (Railway API)'
+        };
+      }
+    } catch (error) {
+      console.log('Railway API authentication failed, trying local auth:', error);
     }
 
     let admin: AdminUser | null = null;

@@ -76,13 +76,13 @@ export class RailwayAPIStorage implements IStorage {
       const envPassword = process.env.RAILWAY_API_PASSWORD;
       const envToken = process.env.RAILWAY_API_TOKEN;
 
-      // Use the authenticated token from Railway API
-      const railwayToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzaGFkbWFuIiwiZXhwIjoxNzUyODc0MDUzfQ.L2JcjClMoLw5u4_1i-C8Sw7FlStUmt1fxYWA1rwAg5c';
+      // Try to use the authenticated token from Railway API if available
+      const railwayToken = process.env.RAILWAY_API_TOKEN;
       
       if (railwayToken) {
         this.authToken = railwayToken;
         this.tokenExpiry = Date.now() + (24 * 60 * 60 * 1000); // 24 hours for API token
-        console.log('Using Railway API token directly');
+        console.log('Using Railway API token from environment');
         return;
       }
 

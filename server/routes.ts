@@ -10,12 +10,16 @@ import {
 } from "@shared/schema";
 import { AuthService, authenticateAdmin, requireSuperAdmin, type AuthRequest } from "./auth";
 import cookieParser from "cookie-parser";
+import { registerRailwayAdminRoutes } from "./railway-admin-routes";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Add cookie parser middleware
   app.use(cookieParser());
+
+  // Register Railway admin routes
+  registerRailwayAdminRoutes(app);
 
   // Health check endpoint (using different path to avoid interfering with frontend)
   app.get('/health', (req, res) => {
