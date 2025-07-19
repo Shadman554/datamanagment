@@ -494,6 +494,40 @@ export class RailwayAPIStorage implements IStorage {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
       console.log(`Creating document in ${collectionName}:`, JSON.stringify(data, null, 2));
+      console.log(`Using endpoint: ${endpoint}`);
+      console.log(`Full URL: ${this.baseURL}${endpoint}`);
+      
+      // Try to understand what the Railway API actually expects by comparing with a working item
+      if (collectionName === 'diseases') {
+        console.log('==== DEBUGGING DISEASE CREATE ====');
+        console.log('Data we are sending:', JSON.stringify(data, null, 2));
+        
+        // First, let's get an existing disease to see the exact format
+        const existingItems = await this.makeRequest(endpoint + '?limit=1');
+        if (existingItems && existingItems.items && existingItems.items.length > 0) {
+          console.log('Existing disease format:', JSON.stringify(existingItems.items[0], null, 2));
+          
+          // Try to match the exact field names from existing data
+          const existingItem = existingItems.items[0];
+          const transformedData = {
+            name: data.name,
+            kurdish: data.kurdish || data.Kurdish || '',  // Handle both cases
+            symptoms: data.symptoms || data.Symptoms || '',
+            cause: data.cause || data.Cause || '',
+            control: data.control || data.Control || ''
+          };
+          
+          console.log('Transformed data to match existing format:', JSON.stringify(transformedData, null, 2));
+          
+          const result = await this.makeRequest(endpoint, {
+            method: 'POST',
+            body: JSON.stringify(transformedData),
+          });
+          
+          console.log('Create result:', JSON.stringify(result, null, 2));
+          return result;
+        }
+      }
       
       const result = await this.makeRequest(endpoint, {
         method: 'POST',
@@ -501,6 +535,26 @@ export class RailwayAPIStorage implements IStorage {
       });
       
       console.log(`Successfully created document in ${collectionName}:`, JSON.stringify(result, null, 2));
+      
+      // Check if the result actually indicates successful creation
+      if (result && result.items && Array.isArray(result.items)) {
+        console.log(`Railway API returned ${result.items.length} items in response, total: ${result.total || 'unknown'}`);
+        
+        // The Railway API seems to return the full collection instead of just the created item
+        // Let's extract just the created item if possible
+        if (result.items.length > 0) {
+          // Find the most recently created item (last in the array or by timestamp)
+          const sortedItems = [...result.items].sort((a, b) => {
+            const timeA = new Date(a.created_at || a.createdAt || 0).getTime();
+            const timeB = new Date(b.created_at || b.createdAt || 0).getTime();
+            return timeB - timeA;
+          });
+          
+          console.log(`Most recent item from create response:`, JSON.stringify(sortedItems[0], null, 2));
+          return sortedItems[0]; // Return just the created item
+        }
+      }
+      
       return result;
     } catch (error) {
       console.error(`Error creating document in ${collectionName}:`, error instanceof Error ? error.message : error);
