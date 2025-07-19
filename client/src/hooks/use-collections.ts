@@ -24,9 +24,16 @@ export function useCreateDocument(collection: CollectionName) {
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate and refetch all related queries to ensure fresh data
       queryClient.invalidateQueries({
         queryKey: [`/api/collections/${collection}`],
       });
+      // Small delay to allow Railway API to synchronize, then refetch
+      setTimeout(() => {
+        queryClient.refetchQueries({
+          queryKey: [`/api/collections/${collection}`],
+        });
+      }, 1000); // 1 second delay to allow API sync
     },
   });
 }
@@ -46,6 +53,12 @@ export function useUpdateDocument(collection: CollectionName) {
       queryClient.invalidateQueries({
         queryKey: [`/api/collections/${collection}`, id],
       });
+      // Small delay to allow Railway API to synchronize, then refetch
+      setTimeout(() => {
+        queryClient.refetchQueries({
+          queryKey: [`/api/collections/${collection}`],
+        });
+      }, 1000);
     },
   });
 }
@@ -60,6 +73,10 @@ export function useDeleteDocument(collection: CollectionName) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
+        queryKey: [`/api/collections/${collection}`],
+      });
+      // Force refetch to show updated list immediately
+      queryClient.refetchQueries({
         queryKey: [`/api/collections/${collection}`],
       });
     },
@@ -114,6 +131,10 @@ export function useBulkOperation(collection: CollectionName) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
+        queryKey: [`/api/collections/${collection}`],
+      });
+      // Force refetch to show updated list immediately
+      queryClient.refetchQueries({
         queryKey: [`/api/collections/${collection}`],
       });
     },
