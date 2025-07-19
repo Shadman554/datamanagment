@@ -192,9 +192,14 @@ export class RailwayAPIStorage implements IStorage {
     }
   }
 
-  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
-    // Ensure we have a valid auth token
-    await this.authenticate();
+  private async makeRequest(endpoint: string, options: RequestInit = {}, customToken?: string): Promise<any> {
+    // Use custom token if provided, otherwise authenticate normally
+    let tokenToUse = customToken;
+    
+    if (!tokenToUse) {
+      await this.authenticate();
+      tokenToUse = this.authToken;
+    }
     
     const url = `${this.baseURL}${endpoint}`;
     const headers: Record<string, string> = {
@@ -207,8 +212,8 @@ export class RailwayAPIStorage implements IStorage {
     }
 
     // Add auth token if available
-    if (this.authToken) {
-      headers['Authorization'] = `Bearer ${this.authToken}`;
+    if (tokenToUse) {
+      headers['Authorization'] = `Bearer ${tokenToUse}`;
     }
 
     const response = await fetch(url, {

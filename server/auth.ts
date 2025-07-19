@@ -555,6 +555,24 @@ export class SecureAuthService {
 
   // Get admin by ID
   static async getAdminById(adminId: string): Promise<AdminUser | null> {
+    // Handle Railway API authenticated users
+    if (adminId.startsWith('railway_')) {
+      const username = adminId.replace('railway_', '');
+      return {
+        id: adminId,
+        username: username,
+        email: `${username}@vet-dict.com`,
+        password: '',
+        role: 'super_admin',
+        firstName: 'Admin',
+        lastName: 'User',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastLoginAt: new Date()
+      };
+    }
+
     try {
       // Try PostgreSQL first using storage layer
       const admin = await storage.getAdminById(adminId);
@@ -624,6 +642,12 @@ export const authenticateAdmin = async (req: AuthRequest, res: Response, next: N
     if (!admin || !admin.isActive) {
       console.log(`🚨 Admin not found or disabled: ${decoded.adminId} from IP: ${ipAddress}`);
       return res.status(401).json({ error: 'Access denied' });
+    }
+
+    // For Railway API authenticated sessions, store the Railway token for API calls
+    const session = activeSessions.get(decoded.sessionId);
+    if (session && (session as any).railwayToken) {
+      (req as any).railwayToken = (session as any).railwayToken;
     }
 
     req.admin = admin;
