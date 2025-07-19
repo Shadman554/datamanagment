@@ -506,17 +506,48 @@ export class RailwayAPIStorage implements IStorage {
       const endpoint = this.getAPIEndpoint(collectionName);
       console.log(`Updating document ${id} in ${collectionName}:`, data);
       
-      // For dictionary/words and drugs, the API uses name-based endpoints, not ID-based
-      if (collectionName === 'words' || collectionName === 'drugs') {
+      // Many Railway API endpoints use name-based identifiers instead of IDs
+      const nameBasedCollections = ['words', 'drugs', 'diseases', 'books', 'staff', 'notifications', 'normalRanges', 'appLinks'];
+      
+      if (nameBasedCollections.includes(collectionName)) {
         // Try to find the item by ID first from the collection
         const allItems = await this.getCollection<T>(collectionName);
         const item = allItems.find((item: any) => item.id === id);
         if (item) {
-          // Use the item name for the API call
-          const itemName = (item as any).name;
-          console.log(`Using name-based endpoint for ${collectionName}: ${itemName}`);
+          // Use the item name/title for the API call based on collection
+          let itemIdentifier = '';
+          switch (collectionName) {
+            case 'words':
+              itemIdentifier = (item as any).name;
+              break;
+            case 'diseases':
+              itemIdentifier = (item as any).name || (item as any).english;
+              break;
+            case 'drugs':
+              itemIdentifier = (item as any).name;
+              break;
+            case 'books':
+              itemIdentifier = (item as any).title || (item as any).name;
+              break;
+            case 'staff':
+              itemIdentifier = (item as any).name;
+              break;
+            case 'notifications':
+              itemIdentifier = (item as any).title || (item as any).name;
+              break;
+            case 'normalRanges':
+              itemIdentifier = (item as any).name;
+              break;
+            case 'appLinks':
+              itemIdentifier = (item as any).title || (item as any).name;
+              break;
+            default:
+              itemIdentifier = (item as any).name;
+          }
           
-          const result = await this.makeRequest(`${endpoint}/${encodeURIComponent(itemName)}`, {
+          console.log(`Using name-based endpoint for ${collectionName}: ${itemIdentifier}`);
+          
+          const result = await this.makeRequest(`${endpoint}/${encodeURIComponent(itemIdentifier)}`, {
             method: 'PUT',
             body: JSON.stringify(data),
           });
@@ -544,15 +575,48 @@ export class RailwayAPIStorage implements IStorage {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
       
-      // For dictionary/words and drugs, the API uses name-based endpoints, not ID-based
-      if (collectionName === 'words' || collectionName === 'drugs') {
+      // Many Railway API endpoints use name-based identifiers instead of IDs
+      const nameBasedCollections = ['words', 'drugs', 'diseases', 'books', 'staff', 'notifications', 'normalRanges', 'appLinks'];
+      
+      if (nameBasedCollections.includes(collectionName)) {
         // Try to find the item by ID first from the collection
         const allItems = await this.getCollection<any>(collectionName);
         const item = allItems.find((item: any) => item.id === id);
         if (item) {
-          // Use the item name for the API call
-          const itemName = (item as any).name;
-          await this.makeRequest(`${endpoint}/${encodeURIComponent(itemName)}`, {
+          // Use the item name/title for the API call based on collection
+          let itemIdentifier = '';
+          switch (collectionName) {
+            case 'words':
+              itemIdentifier = (item as any).name;
+              break;
+            case 'diseases':
+              itemIdentifier = (item as any).name || (item as any).english;
+              break;
+            case 'drugs':
+              itemIdentifier = (item as any).name;
+              break;
+            case 'books':
+              itemIdentifier = (item as any).title || (item as any).name;
+              break;
+            case 'staff':
+              itemIdentifier = (item as any).name;
+              break;
+            case 'notifications':
+              itemIdentifier = (item as any).title || (item as any).name;
+              break;
+            case 'normalRanges':
+              itemIdentifier = (item as any).name;
+              break;
+            case 'appLinks':
+              itemIdentifier = (item as any).title || (item as any).name;
+              break;
+            default:
+              itemIdentifier = (item as any).name;
+          }
+          
+          console.log(`Using name-based endpoint for deletion: ${itemIdentifier}`);
+          
+          await this.makeRequest(`${endpoint}/${encodeURIComponent(itemIdentifier)}`, {
             method: 'DELETE',
           });
           return;
