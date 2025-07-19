@@ -236,6 +236,13 @@ export class RailwayAPIStorage implements IStorage {
         return { items: [] }; // Return empty items for server errors
       }
       
+      // For POST requests, don't return empty data - let the error bubble up
+      if (options.method === 'POST') {
+        const error = new Error(`API request failed (${response.status}): ${errorText}`);
+        (error as any).response = response;
+        throw error;
+      }
+      
       // For authentication errors, try to re-authenticate
       if (response.status === 401) {
         console.log('Authentication failed, resetting auth token');
@@ -486,17 +493,22 @@ export class RailwayAPIStorage implements IStorage {
   async createDocument<T>(collectionName: CollectionName, data: any): Promise<T> {
     try {
       const endpoint = this.getAPIEndpoint(collectionName);
-      console.log(`Creating document in ${collectionName}:`, data);
+      console.log(`Creating document in ${collectionName}:`, JSON.stringify(data, null, 2));
       
       const result = await this.makeRequest(endpoint, {
         method: 'POST',
         body: JSON.stringify(data),
       });
       
-      console.log(`Successfully created document in ${collectionName}:`, result);
+      console.log(`Successfully created document in ${collectionName}:`, JSON.stringify(result, null, 2));
       return result;
     } catch (error) {
-      console.error(`Error creating document in ${collectionName}:`, error);
+      console.error(`Error creating document in ${collectionName}:`, error instanceof Error ? error.message : error);
+      // Log the full error details to help debug the issue
+      if (error instanceof Error && (error as any).response) {
+        console.error('HTTP Response:', (error as any).response.status, (error as any).response.statusText);
+        console.error('Response Body:', await (error as any).response.text());
+      }
       throw error;
     }
   }
